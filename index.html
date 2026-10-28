@@ -271,6 +271,13 @@
     .row > span.h { display: none; }
     .opt small { display: none; }
   }
+  /* short laptop windows: a tighter keys box so the title fits */
+  @media (max-height: 700px) {
+    .keys { font-size: 12px; gap: 1px 12px; padding: 6px 12px; }
+    kbd { height: 19px; min-width: 19px; font-size: 11px; }
+    .screen { gap: 6px; }
+    .logo .l1 { font-size: clamp(30px, min(7vw, 10vh), 90px); }
+  }
   /* short screens (phones sideways), last so it wins: everything tightens up to fit without scrolling */
   @media (max-height: 460px) {
     .credit { display: none; }
@@ -356,13 +363,14 @@
   <button class="btn pulse" id="startBtn">▶ BOUNCE!</button>
   <p class="hiline" id="titleHi"></p>
   <div class="keys">
-    <span>walk</span><span><kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd></span>
+    <span>walk · hop off a trampoline</span><span><kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd></span>
+    <span>step onto a trampoline</span><span><kbd>↓</kbd> or <kbd>S</kbd></span>
     <span>open or close a door</span><span><kbd>Space</kbd> <kbd>↑</kbd> <kbd>W</kbd></span>
-    <span>2 players</span><span><b>Teddy</b> <kbd>A</kbd><kbd>D</kbd><kbd>W</kbd> · <b>Tommy</b> <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd></span>
+    <span>2 players</span><span><b>Teddy</b> <kbd>A</kbd><kbd>D</kbd><kbd>S</kbd><kbd>W</kbd> · <b>Tommy</b> <kbd>←</kbd><kbd>→</kbd><kbd>↓</kbd><kbd>↑</kbd></span>
     <span>call your brother</span><span><kbd>T</kbd></span>
     <span>pause · sound</span><span><kbd>P</kbd> · <kbd>M</kbd></span>
   </div>
-  <p class="touch-hint">◀ ▶ walk, and in a shaft they pick the side you hop off. 🚪 opens a door into a cat: BONK! Tap your brother's face to call him!</p>
+  <p class="touch-hint">◀ ▶ walk onto a trampoline, and while you bounce they hop you off that way. 🚪 opens a door into a cat: BONK! Tap your brother's face to call him!</p>
   <div class="credit">built with <b>Claude Code</b></div>
 </div>
 <div id="pause" class="screen hidden">

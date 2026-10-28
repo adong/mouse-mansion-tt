@@ -1,8 +1,35 @@
 [
-  { "label": "muted", "js": "localStorage.setItem('claudeGames.muted', '1'); localStorage.setItem('claudeGames.lang', 'en'); location.reload(); 'reload'", "wait": 5000 },
-  { "label": "playCheck", "js": "(() => { const t0 = performance.now(); const r = game.playCheck(); return JSON.stringify({ ok: r.ok, total: r.total, failed: r.failed.slice(0, 8), ms: Math.round(performance.now() - t0) }); })()" },
-  { "label": "playCheck mirror (must fail)", "js": "(() => { const r = game.playCheck('mirror'); return JSON.stringify({ ok: r.ok, failedCount: r.failed.length, first: r.failed.slice(0, 2) }); })()" },
-  { "label": "playCheck stuckShaft (must fail)", "js": "(() => { const r = game.playCheck('stuckShaft'); return JSON.stringify({ ok: r.ok, failedCount: r.failed.length, first: r.failed.slice(0, 3) }); })()" },
-  { "label": "headless check in the page", "js": "(() => { const r = game.check(); return JSON.stringify({ ok: r.ok, n: r.results.length, failed: r.failed }); })()" },
-  { "label": "sound in code (muted)", "js": "JSON.stringify({ muted: game.state().muted, sfx: game.state().sfx })" }
+ {
+  "label": "muted",
+  "js": "localStorage.setItem('claudeGames.muted', '1'); localStorage.setItem('claudeGames.lang', 'en'); location.reload(); 'reload'",
+  "wait": 5000
+ },
+ {
+  "label": "playCheck",
+  "js": "(() => { const t0 = performance.now(); const r = game.playCheck(); return JSON.stringify({ ok: r.ok, total: r.total, failed: r.failed.slice(0, 8), ms: Math.round(performance.now() - t0) }); })()"
+ },
+ {
+  "label": "playCheck mirror (must fail)",
+  "js": "(() => { const r = game.playCheck('mirror'); return JSON.stringify({ ok: r.ok, failedCount: r.failed.length, first: r.failed.slice(0, 2) }); })()"
+ },
+ {
+  "label": "playCheck stuckShaft (must fail)",
+  "js": "(() => { const r = game.playCheck('stuckShaft'); return JSON.stringify({ ok: r.ok, failedCount: r.failed.length, first: r.failed.slice(0, 3) }); })()"
+ },
+ {
+  "label": "playCheck holdThrough (the old walk-across trampolines; must fail)",
+  "js": "(() => { const r = game.playCheck('holdThrough'); return JSON.stringify({ ok: r.ok, failedCount: r.failed.length, first: r.failed.slice(0, 2) }); })()"
+ },
+ {
+  "label": "playCheck waitFloor (the old wait-for-the-next-floor; must fail)",
+  "js": "(() => { const r = game.playCheck('waitFloor'); return JSON.stringify({ ok: r.ok, failedCount: r.failed.length, first: r.failed.slice(0, 2) }); })()"
+ },
+ {
+  "label": "headless check in the page",
+  "js": "(() => { const r = game.check(); return JSON.stringify({ ok: r.ok, n: r.results.length, failed: r.failed }); })()"
+ },
+ {
+  "label": "sound in code (muted)",
+  "js": "JSON.stringify({ muted: game.state().muted, sfx: game.state().sfx })"
+ }
 ]

@@ -135,6 +135,14 @@
     for (const x of SX) {
       box(SW * 2 - 0.1, ROOF_Y + 2.6 - 0.3, 0.06, shaftM, x, (ROOF_Y - 0.3 - 2.6) / 2, -1.22, root);
       for (let y = -2; y < ROOF_Y - 0.6; y += 0.9) box(0.18, 0.18, 0.04, dotM, x, y, -1.17, root);
+      // up-and-down arrows at every floor: this gap is where you bounce
+      for (let f = 0; f < 4; f++) {
+        const e = A.emoji('↕️', 0.8);
+        e.material.depthTest = true;
+        e.renderOrder = 0;
+        e.position.set(x, FLOOR_Y[f] + 1.3, -1.1);
+        root.add(e);
+      }
     }
     // outer walls and corner posts
     const post = mat('#fff4e0', { roughness: 0.7 });
@@ -207,19 +215,20 @@
   };
 
   // ---------- trampolines at the bottom of each shaft ----------
+  // its mat sits level with the ground floor, in the gap between the rooms: the next step along the floor
   A.trampoline = function () {
     const g = new T.Group();
     const red = mat('#ff4d6d'), blue = mat('#3d6ad6');
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.14, 0.75, 0.14, sx > 0 ? red : blue, sx * 0.62, -0.38, sz * 0.75, g);
-    box(1.45, 0.14, 0.14, red, 0, -0.06, 0.78, g);
-    box(1.45, 0.14, 0.14, red, 0, -0.06, -0.78, g);
-    const matM = new T.MeshStandardMaterial({ color: A.WEAR_COLORS[0], roughness: 0.5 });
-    const mt = box(1.3, 0.1, 1.5, matM, 0, -0.04, 0, g);
-    const springs = [];
-    for (let i = 0; i < 5; i++) springs.push(box(0.05, 0.05, 0.12, mat('#cccccc', { metalness: 0.6, roughness: 0.3 }), -0.5 + i * 0.25, -0.06, 0.7, g));
-    // the pillow under it, for a soft landing if it tears
-    const pillow = box(1.6, 0.5, 1.6, mat('#ffe1ef', { roughness: 0.9 }), 0, -1.45, 0, g);
-    pillow.scale.set(1, 1, 1);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.16, 2.6, 0.16, sx > 0 ? red : blue, sx * 0.68, -1.38, sz * 0.82, g);
+    box(1.56, 0.16, 0.16, red, 0, -0.08, 0.86, g);
+    box(1.56, 0.16, 0.16, red, 0, -0.08, -0.86, g);
+    box(0.16, 0.16, 1.8, blue, -0.72, -0.08, 0, g);
+    box(0.16, 0.16, 1.8, blue, 0.72, -0.08, 0, g);
+    const matM = new T.MeshStandardMaterial({ color: A.WEAR_COLORS[0], roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0.08 });
+    const mt = box(1.32, 0.1, 1.6, matM, 0, -0.04, 0, g);
+    for (let i = 0; i < 5; i++) box(0.05, 0.05, 0.12, mat('#cccccc', { metalness: 0.6, roughness: 0.3 }), -0.5 + i * 0.25, -0.08, 0.78, g);
+    // the pillow under it on the basement floor, for a soft landing if it tears
+    const pillow = box(1.5, 0.5, 1.6, mat('#ffe1ef', { roughness: 0.9 }), 0, -2.5, 0, g);
     const patch = box(0.5, 0.11, 0.5, mat('#ffffff'), 0, -0.03, 0.2, g);
     patch.visible = false;
     g.userData = { mat: mt, matM, patch, pillow };

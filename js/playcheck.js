@@ -6,10 +6,15 @@
      Tommy and both brothers in 2 players (each with his own keys, and only his), with keys and with the touch buttons.
    - shafts: walking off a floor drops you onto the trampoline; in every shaft → gets you off on the right of the
      screen and ← on the left, keys and touch, on every mansion; toward a wall you keep bouncing.
+   - getting on, the way Alan plays: holding → (or ←) and walking into every shaft from 1 m away, on every floor and
+     both sides of every shaft, on every mansion, puts you on the trampoline bouncing (never across it); the same with
+     tapped keys, a held touch button and ↓; then a fresh press gets you off on that side.
    - doors: the door key (and 🚪) opens the door next to you and bonks the cat in front of it.
    - nothing leaves him stuck: a key held through pause, a lost window, a cancelled touch, a door closed on him, a hug,
      a torn trampoline, the brother's visit, the next mansion, and a "keyboard kid" mashing keys on every mansion.
-   game.playCheck('mirror') and game.playCheck('stuckShaft') prove the check fails when the controls are wrong. */
+   - in a shaft, ← or → hops him off that way right away, going up or coming down, at any height.
+   game.playCheck('mirror'), game.playCheck('stuckShaft'), game.playCheck('holdThrough') (the old walk-across
+   trampolines) and game.playCheck('waitFloor') (the old wait-for-the-next-floor) prove the check fails. */
 (function () {
   'use strict';
   const LV = MM.levels;
@@ -46,8 +51,9 @@
   const ROOMS = [-6.8, 0, 6.8];
   // wait in a shaft until he gets off (or give up)
   function untilOff(i, secs) {
-    for (let t = 0; t < secs; t += 0.05) { if (pl(i).mode !== 'shaft') return true; step(0.05); }
-    return pl(i).mode !== 'shaft';
+    const busy = () => pl(i).mode === 'shaft' || pl(i).mode === 'hop';
+    for (let t = 0; t < secs; t += 0.05) { if (!busy()) return true; step(0.05); }
+    return !busy();
   }
 
   function run(sab) {
@@ -105,7 +111,7 @@
             const bad = [];
             for (let k = 0; k < 4; k++) {
               for (const s of [1, -1]) {
-                game.putShaft(i, k, 1.2, 1);
+                game.putShaft(i, k, 2.2, 1);
                 step(0.05);
                 const sx0 = game.toScreen(LV.SX[k], 1.5, 0.35)[0];
                 if (how === 'keys') press(s > 0 ? R : L, 0.08); else tap(i, s > 0 ? 'r' : 'l', 0.08);
@@ -120,6 +126,105 @@
             ok(`shafts ${players === 2 ? '2P ' + pl(i).who : '1P'} mansion ${stage + 1} ${how}`, !bad.length, bad.length ? bad.slice(0, 3).join('; ') : 'every shaft: → off on the right, ← off on the left, never through a wall');
           }
         }
+      }
+      document.body.classList.toggle('touch', hadTouch);
+
+      // ---------- getting on a trampoline the way Alan plays: hold → (or ←) and walk into every shaft ----------
+      // From 1 m away on every floor, on both sides of every shaft, on every mansion: he must end up on the trampoline
+      // bouncing (up the screen, in the shaft, never past it and never off while the key is down); then a fresh press
+      // gets him off at the next floor on that side. Keys held, keys tapped, touch held, and ↓.
+      const sim = MM.sim;
+      const walkOn = (i, f, k, side, how, R, L) => {
+        const into = -side, dirKey = into > 0 ? R : L, btn = into > 0 ? 'r' : 'l';
+        game.put(i, f, sim.edgeOf(k, side) + side * 1.0);
+        step(0.05);
+        const sy0 = pl(i).sy, shaftSx = game.toScreen(LV.SX[k], 1, 0.35)[0];
+        let lowSy = sy0, upSy = 1e9, bounced = false, off = false, seenIn = false;
+        const el = how === 'touch' ? button(i, btn) : null;
+        const o = { pointerId: 40 + i, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true };
+        if (how === 'hold') key(dirKey, true);
+        else if (how === 'touch') el.dispatchEvent(new PointerEvent('pointerdown', o));
+        else if (how === 'down') press(i ? 'ArrowDown' : (st().two ? 'KeyS' : 'ArrowDown'), 0.05);
+        for (let t = 0; t < 4; t += 0.05) {
+          if (how === 'tap' && !seenIn && Math.round(t / 0.05) % 3 === 0) { key(dirKey, true); step(0.05); key(dirKey, false); continue; }
+          step(0.05);
+          const q = pl(i);
+          if (q.mode === 'shaft') seenIn = true;
+          if (seenIn && q.mode === 'ground') off = true;
+          if (q.bounces > 0) bounced = true;
+          if (!bounced) lowSy = Math.max(lowSy, q.sy); else upSy = Math.min(upSy, q.sy);
+        }
+        const q = pl(i);
+        // on the trampoline: in the shaft, it bounced him, and he went back up the screen from the bottom
+        const onIt = q.mode === 'shaft' && bounced && !off && lowSy - upSy > 40 && Math.abs(q.sx - shaftSx) < 25;
+        if (how === 'hold') key(dirKey, false);
+        else if (how === 'touch') el.dispatchEvent(new PointerEvent('pointerup', o));
+        step(0.1);
+        // a fresh press toward a side with a floor: off at the next floor, on that side of the screen
+        const go = sim.segBeside(k, into) >= 0 ? into : -into;
+        if (how === 'touch') tap(i, go > 0 ? 'r' : 'l', 0.08); else press(go > 0 ? R : L, 0.08);
+        const gotOff = untilOff(i, 5);
+        const b = pl(i);
+        const offOk = gotOff && Math.sign(b.sx - shaftSx) === go;
+        return { onIt, offOk, info: `${q.mode}${bounced ? ', bounced' : ''}${off ? ', WENT ACROSS' : ''}, back up ${upSy < 1e9 ? lowSy - upSy : 0} px; then ${gotOff ? 'off on the ' + (Math.sign(b.sx - shaftSx) > 0 ? 'right' : 'left') : 'never off'}` };
+      };
+      const ways = [['hold', [0, 1, 2, 3, 4, 5]], ['tap', [0, 3]], ['touch', [0, 5]], ['down', [0, 2, 4]]];
+      for (const [how, stages] of ways) {
+        for (const stage of stages) {
+          for (const [players, i, R, L] of [[1, 0, 'ArrowRight', 'ArrowLeft'], [2, 1, 'ArrowRight', 'ArrowLeft'], [2, 0, 'KeyD', 'KeyA']]) {
+            if (players === 2 && how !== 'hold' && how !== 'touch') continue;
+            document.body.classList.toggle('touch', how === 'touch');
+            fresh(stage, { players, level: stage % 2 ? 'normal' : 'easy' });
+            openAll();
+            if (players === 2) game.put(1 - i, 3, 0);
+            const bad = [];
+            let n = 0;
+            for (let f = 0; f < 4; f++) {
+              for (let k = 0; k < 4; k++) {
+                for (const side of [-1, 1]) {
+                  if (sim.segBeside(k, side) < 0) continue;
+                  const r = walkOn(i, f, k, side, how, R, L);
+                  n++;
+                  if (!r.onIt || !r.offOk) bad.push(`floor ${f} shaft ${k} from the ${side > 0 ? 'right' : 'left'}: ${r.info}`);
+                }
+              }
+            }
+            ok(`get on ${how} ${players === 2 ? '2P ' + pl(i).who : '1P'} mansion ${stage + 1}`, !bad.length, bad.length ? bad.slice(0, 3).join('; ') : `${n} walks into a shaft: on the trampoline and bouncing every time, then off on the side pressed`);
+          }
+        }
+      }
+      document.body.classList.toggle('touch', hadTouch);
+
+      // ← or → while bouncing, going up or coming down, at any height: he goes that way on screen right away
+      for (const [players, i, R, L, how] of [[1, 0, 'ArrowRight', 'ArrowLeft', 'keys'], [1, 0, 'ArrowRight', 'ArrowLeft', 'touch'], [2, 0, 'KeyD', 'KeyA', 'keys'], [2, 1, 'ArrowRight', 'ArrowLeft', 'keys']]) {
+        document.body.classList.toggle('touch', how === 'touch');
+        const bad = [];
+        let n = 0;
+        for (let stage = 0; stage < 6; stage++) {
+          fresh(stage, { players });
+          openAll();
+          for (let k = 0; k < 4; k++) {
+            for (const s of [1, -1]) {
+              if (sim.segBeside(k, s) < 0) continue;
+              for (const y of [1.5, 4.5, 7.4]) {
+                for (const vdir of [1, -1]) {
+                  game.putShaft(i, k, y, vdir);
+                  step(0.02);
+                  const a = pl(i);
+                  if (how === 'touch') tap(i, s > 0 ? 'r' : 'l', 0.05); else press(s > 0 ? R : L, 0.05);
+                  step(0.05);
+                  const b = pl(i);
+                  n++;
+                  const moved = (b.sx - a.sx) * s;
+                  untilOff(i, 2);
+                  const c = pl(i);
+                  if (moved < 12 || c.mode !== 'ground' || Math.sign(c.sx - a.sx) !== s) bad.push(`mansion ${stage + 1} shaft ${k} at ${y} m going ${vdir > 0 ? 'up' : 'down'}, ${s > 0 ? '→' : '←'}: moved ${Math.round(moved)} px that way in 0.12 s, then ${c.mode}`);
+                }
+              }
+            }
+          }
+        }
+        ok(`press in a shaft ${players === 2 ? '2P ' + (i ? 'Tommy' : 'Teddy') : '1P'} ${how}`, !bad.length, bad.length ? bad.slice(0, 3).join('; ') : `${n} presses at heights between the floors, going up and down: he starts hopping off that way within 0.12 s, every time`);
       }
       document.body.classList.toggle('touch', hadTouch);
 

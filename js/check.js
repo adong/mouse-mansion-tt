@@ -6,6 +6,10 @@
    - doors: opening any door of any mansion bonks the cat in front of it (dizzy, knocked back) and not one behind the
      mouse, one 4 m past the door or one on another floor; a closed door stops cats and mice; a glowing door's wave
      tumbles every cat ahead of it on its floor, and none behind it or on other floors.
+   - gettingOn: walking into any shaft of any mansion from any floor, from either side, holding the key the whole
+     time, puts you on the trampoline bouncing (never across it, never off while you hold); let go and press again and
+     you hop off within half a second onto the nearest floor on that side; ↓ next to a shaft walks you onto it too (not with a closed door in
+     the way, not from the middle of a room).
    - pairs: two toys of the same kind in a row are a PAIR bonus; two different kinds are not.
    - stageEnds: a mansion ends when every toy is collected, not one toy sooner, and the next one loads.
    - catsFindWay: on every mansion, a cat from each room finds a mouse waiting in any other room, along the floors and
@@ -72,8 +76,8 @@
           // getting off: each side that has a floor, at the next floor passed going up
           for (const s of [-1, 1]) {
             const w2 = world({ level, sabotage: sab });
-            const q = S().putShaft(w2, 0, k, 1.2, 1, true);
-            run(w2, (ww, i) => ({ lr: i < 3 ? s : 0 }), 60 * 3, () => q.mode === 'shaft');
+            const q = S().putShaft(w2, 0, k, 2.2, 1, true);
+            run(w2, (ww, i) => ({ lr: i < 3 ? s : 0 }), 60 * 3, () => q.mode === 'shaft' || q.mode === 'hop');
             const can = S().segBeside(k, s) >= 0;
             if (can && (q.mode !== 'ground' || q.f !== 1 || Math.sign(q.x - LV().SX[k]) !== s)) bad.push(`${level} shaft ${k} ${s > 0 ? '→' : '←'}: ${q.mode} on floor ${q.f} at ${q.x.toFixed(1)} (wanted floor 1 on that side)`);
             if (!can && q.mode !== 'shaft') bad.push(`${level} shaft ${k}: got off through the wall`);
@@ -84,7 +88,7 @@
         const p = S().putShaft(w, 0, 1, 0.5, -1, false);
         let n = 0;
         run(w, {}, 60 * 30, (ww) => { n += ww.events.filter((e) => e.type === 'bounce').length; return n < 3; });
-        run(w, (ww) => ({ lr: S().nextFloor(p) === 0 ? 1 : 0 }), 60 * 8, () => p.mode === 'shaft');
+        run(w, (ww) => ({ lr: p.vdir < 0 && p.y < 1 ? 1 : 0 }), 60 * 8, () => p.mode === 'shaft' || p.mode === 'hop');
         const off = p.mode === 'ground';
         run(w, { lr: -1 }, 30, () => p.mode === 'ground');
         let n2 = 0, torn = false;
@@ -92,7 +96,7 @@
         if (!off || torn || n2 < 4) bad.push(`${level}: getting off didn't reset the count (off ${off}, ${n2} more bounces, tore ${torn})`);
         info.push(level === 'normal' ? 'NORMAL: 4 bounces, the 5th landing tears it (a plop, a life)' : 'EASY: never tears');
       }
-      return { ok: !bad.length, info: bad.length ? bad.join('; ') : `every shaft bounces past the top floor and lets you off on either side with a floor at the next floor; ${info.join('; ')}; getting off resets it` };
+      return { ok: !bad.length, info: bad.length ? bad.join('; ') : `every shaft bounces past the top floor and lets you off on either side with a floor (never through a wall); ${info.join('; ')}; getting off resets it` };
     },
 
     doors(sab) {
@@ -137,8 +141,13 @@
       const d = w.doors.find((q) => q.f === 1 && q.s === 1);
       S().put(w, 0, 1, d.x - 1.5);
       const c = cat(w, 1, d.x + 1.5);
-      run(w, { lr: 1 }, 120);
-      if (w.players[0].x > d.x - 0.3 || c.x < d.x + 0.3) bad.push(`a closed door let through: mouse at ${w.players[0].x.toFixed(2)}, cat at ${c.x.toFixed(2)} (door ${d.x})`);
+      let crossed = '';
+      run(w, { lr: 1 }, 240, () => {
+        // every step: nobody on floor 1 inside the doorway (the cat may well go round by the shafts)
+        if (w.players[0].x > d.x - 0.3) crossed = `mouse at ${w.players[0].x.toFixed(2)}`;
+        if (c.st === 'walk' && c.f === 1 && Math.abs(c.x - d.x) < 0.3) crossed = `cat at ${c.x.toFixed(2)}`;
+      });
+      if (crossed) bad.push(`a closed door let through: ${crossed} (door ${d.x})`);
       // the glowing door's wave
       let waves = 0;
       for (const { li, di, d: gd } of DOORS().filter((q) => q.d.glow)) {
@@ -163,6 +172,69 @@
         }
       }
       return { ok: !bad.length, info: bad.length ? bad.join('; ') : `${n} door openings (every door of all 6 mansions, from both sides): the cat in front bonked, none behind, 4 m past or upstairs; closed doors stop cats and mice; ${waves} glowing-door waves tumble every cat ahead on the floor and nobody else` };
+    },
+
+    gettingOn(sab) {
+      const bad = [];
+      let n = 0;
+      const sim = S();
+      for (const level of ['easy', 'normal']) {
+        for (let li = 0; li < 6; li++) {
+          for (let f = 0; f < 4; f++) {
+            for (let k = 0; k < 4; k++) {
+              for (const side of [-1, 1]) {
+                if (sim.segBeside(k, side) < 0) continue;
+                const w = world({ level, stage: li, sabotage: sab });
+                w.toys.forEach((t) => (t.f = 9));
+                const p = sim.put(w, 0, f, sim.edgeOf(k, side) + side * 1.0);
+                const into = -side; // the shaft is the other way
+                let off = 0, lands = 0, top = -9;
+                // hold the key for 6 s, the way a kid walks
+                run(w, { lr: into }, 360, (ww) => {
+                  for (const e of ww.events) { if (e.type === 'off') off++; if (e.type === 'bounce') lands++; }
+                  if (p.mode === 'shaft') top = Math.max(top, p.y);
+                });
+                n++;
+                const tag = `${level} mansion ${li + 1} floor ${f} shaft ${k} walking ${into > 0 ? '→' : '←'}`;
+                if (p.mode !== 'shaft' || off || lands < 2 || top < FY()[3]) { bad.push(`${tag}: ${p.mode} on floor ${p.f}, got off ${off}, ${lands} bounces, up to ${top.toFixed(1)}`); continue; }
+                // let go, press once toward a side with a floor: off right away, onto the nearest floor there
+                const go = sim.segBeside(k, into) >= 0 ? into : -into;
+                run(w, {}, 2);
+                const y = p.y;
+                let near = 0;
+                for (let q = 1; q < 4; q++) if (Math.abs(FY()[q] - y) < Math.abs(FY()[near] - y)) near = q;
+                run(w, (ww, i) => ({ lr: i < 4 ? go : 0 }), 30, () => p.mode === 'shaft' || p.mode === 'hop');
+                if (p.mode !== 'ground' || Math.sign(p.x - LV().SX[k]) !== go || Math.abs(p.f - near) > 0) bad.push(`${tag}: let go and pressed ${go > 0 ? '→' : '←'} at height ${y.toFixed(1)}: ${p.mode} on floor ${p.f} at ${p.x.toFixed(1)} within half a second`);
+              }
+            }
+          }
+          if (bad.length > 4) break;
+        }
+      }
+      // ↓ next to a shaft (either side) walks you onto it; not from the middle of a room or past a closed door
+      for (let k = 0; k < 4; k++) {
+        for (const side of [-1, 1]) {
+          if (sim.segBeside(k, side) < 0) continue;
+          const w = world({ sabotage: sab });
+          w.doors.forEach((d) => (d.open = true));
+          const p = sim.put(w, 0, 2, sim.edgeOf(k, side) + side * 1.2);
+          let lands = 0;
+          run(w, (ww, i) => ({ down: i === 0 }), 150, (ww) => { lands += ww.events.filter((e) => e.type === 'bounce').length; });
+          if (p.mode !== 'shaft' || !lands) bad.push(`↓ beside shaft ${k}: ${p.mode}, ${lands} bounces`);
+        }
+      }
+      const w = world({ sabotage: sab });
+      const p = sim.put(w, 0, 2, 0.3);
+      w.doors.forEach((d) => (d.open = true));
+      run(w, (ww, i) => ({ down: i === 0 }), 90);
+      if (p.mode !== 'ground' || Math.abs(p.x - 0.3) > 0.01) bad.push(`↓ in the middle of a room moved him (${p.mode} at ${p.x.toFixed(2)})`);
+      const w2 = world({ stage: 0, sabotage: sab });
+      const d = w2.doors.find((q) => q.f === 1 && q.s === 1);
+      d.open = false;
+      const q = sim.put(w2, 0, 1, d.x - 0.9);
+      run(w2, (ww, i) => ({ down: i === 0 }), 90);
+      if (q.mode !== 'shaft') bad.push(`↓ near shaft 1 with the door on the other side: ${q.mode}`);
+      return { ok: !bad.length, info: bad.length ? bad.slice(0, 5).join('; ') : `${n} walks into a shaft holding the key (every mansion, floor, shaft and side, EASY and NORMAL): always on the trampoline bouncing, never across it or off while held; let go and press: off within half a second onto the nearest floor on that side; ↓ beside a shaft walks him on` };
     },
 
     pairs(sab) {
@@ -316,7 +388,7 @@
         const q = S().putShaft(w2, 0, k, 2, 1, true);
         run(w2, { lr: -s }, 60 * 3);
         const still = q.mode === 'shaft';
-        run(w2, { lr: s }, 60 * 4, () => q.mode === 'shaft');
+        run(w2, { lr: s }, 60 * 4, () => q.mode === 'shaft' || q.mode === 'hop');
         if (!still || q.mode !== 'ground') bad.push(`shaft ${k} at the wall: ${still ? 'bounced' : 'got off through the wall'}, then ${q.mode}`);
       }
       // a hug, a plop, a cleared mansion: walking again afterwards
@@ -359,6 +431,9 @@
     ['noBonk', 'doors', 'doors bonk nobody'],
     ['bonkAll', 'doors', 'a door bonks every cat on the floor'],
     ['noWave', 'doors', 'glowing doors send no wave'],
+    ['holdThrough', 'gettingOn', 'the key you walk in with gets you off again (walks you across a trampoline)'],
+    ['noDown', 'gettingOn', '↓ next to a shaft does nothing'],
+    ['waitFloor', 'gettingOn', '← or → in a shaft waits for the next floor instead of hopping off'],
     ['noPair', 'pairs', 'pairs earn nothing'],
     ['pairAlways', 'pairs', 'any two toys are a pair'],
     ['neverClear', 'stageEnds', 'a mansion never ends'],

@@ -1,6 +1,6 @@
 /* TT Mouse Mansion: the autopilot. It plays the title-screen demo and the checks' "every mansion can be cleared" soak.
    It picks the toy that's quickest to reach (the same room-and-shaft map the cats use, doors counted as open), walks
-   there, opens a closed door in its way, and in a shaft presses the side of its floor just as that floor comes up.
+   there, opens a closed door in its way, and in a shaft presses the side of its floor as he bounces past it.
    It never reads keys. */
 (function (root) {
   'use strict';
@@ -39,7 +39,7 @@
     }
     if (p.mode === 'shaft' && p.armed) {
       const ex = sim.shaftExit(rs, D, p.sh, vs);
-      if (ex && sim.nextFloor(p) === ex.f) out.lr = ex.side;
+      if (ex && Math.abs(p.y - MM.levels.FLOOR_Y[ex.f]) < 0.9) out.lr = ex.side; // close to his floor: hop off
     }
     return out;
   }

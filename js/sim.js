@@ -1,7 +1,8 @@
 /* TT Mouse Mansion: the rules, with no drawing, in fixed 1/60 s steps (the page, the autopilot and the checks all run these).
-   - Mice (Teddy and Tommy in mouse ears) walk along the floors. Walking off a room's end drops you down a shaft onto
-     its trampoline: you bounce up and down the shaft, and pressing ← or → gets you off at the next floor you pass on
-     that side. On NORMAL a trampoline wears out: come down on it a fifth time in a row and it tears, and you plop onto
+   - Mice (Teddy and Tommy in mouse ears) walk along the floors. Walking off a room's end (or ↓ next to a shaft) puts
+     you down the shaft onto its trampoline: you bounce up and down the shaft, and pressing ← or → after the first
+     bounce hops you off right away, onto the nearest floor on that side. The key you walked in with doesn't count
+     until you let go of it, so holding → walks you onto a trampoline, never across it. On NORMAL a trampoline wears out: come down on it a fifth time in a row and it tears, and you plop onto
      the basement pillow (a life). On EASY it never tears. Getting off onto a floor resets the count.
    - Doors: the door key opens or closes the door next to you. It swings away from you; a cat in its way is bonked
      (dizzy, knocked back). A glowing door also sends a bubble wave along its floor: every cat ahead of it on that floor
@@ -19,10 +20,10 @@
   const { FLOOR_Y, WALL, SX, SW, SEGS, TRAMP_Y, APEX_Y, PILLOW_Y } = LV;
   const DT = 1 / 60;
   const PR = 0.34, CR = 0.4; // a mouse's and a cat's half width
-  const DOOR_HALF = 0.2, REACH = 1.6, SWING = 2.0, KNOCK = 2.7;
+  const DOOR_HALF = 0.2, REACH = 1.6, DOWN_REACH = 1.8, SWING = 2.0, KNOCK = 2.7;
   const CATCH_R = 0.72, TOY_R = 0.7;
   const WAVE_V = 12, WAVE_REACH = 1.3; // the bubble wave's speed, and how far above or below its floor it scoops a cat in a shaft
-  const HANG = 0.16, EXIT_EPS = 0.06;
+  const HANG = 0.16, EXIT_EPS = 0.06, HOP_T = 0.28;
   const READY = 1.5, CLEAR_T = 3.2, HUG_T = 1.6, PLOP_T = 1.7, ARRIVE_T = 0.6, SWEPT_UP = 1.4;
   const B_TREAT = 0.6, B_GO = 1.0, B_OPEN = 1.7, B_END = 2.7; // the brother's visit
   const TREATS = ['🍦', '💧', '🧃', '🍪', '🍉', '🍌'];
@@ -58,7 +59,7 @@
   }
   function rand(w) { w.rng = (Math.imul(w.rng ^ (w.rng >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) >>> 0; return (w.rng & 0xffffff) / 0x1000000; }
   function newPlayer(who, i, lives) {
-    return { i, who, score: 0, lives, out: false, extra: false, x: 0, y: 0, f: 0, sh: -1, mode: 'ground', vdir: 0, hang: 0, bounces: 0, armed: false, want: 0, face: 1, t: 0, inv: 0, walkT: 0, lastToy: null, toys: 0, safe: false, act: false };
+    return { i, who, score: 0, lives, out: false, extra: false, x: 0, y: 0, f: 0, sh: -1, mode: 'ground', vdir: 0, hang: 0, bounces: 0, armed: false, want: 0, block: 0, auto: 0, face: 1, t: 0, inv: 0, walkT: 0, lastToy: null, toys: 0, safe: false, act: false };
   }
   const startX = (w, p) => (w.two ? (p.i ? 1.5 : -1.5) : -1.5);
 
@@ -83,7 +84,7 @@
     if (!first) ev(w, 'stage', { li: w.li });
   }
   function placeStart(w, p) {
-    p.x = startX(w, p); p.y = 0; p.f = 0; p.sh = -1; p.mode = 'ground'; p.vdir = 0; p.bounces = 0; p.armed = false; p.want = 0;
+    p.x = startX(w, p); p.y = 0; p.f = 0; p.sh = -1; p.mode = 'ground'; p.vdir = 0; p.bounces = 0; p.armed = false; p.want = 0; p.block = 0; p.auto = 0;
     p.face = p.x < 0 ? 1 : -1;
   }
 
@@ -253,9 +254,27 @@
       }
       return;
     }
+    if (p.mode === 'hop') {
+      // a quick hop sideways out of the shaft onto the floor
+      const h = p.hop;
+      h.t += DT;
+      const u = Math.min(1, h.t / HOP_T);
+      p.x = h.x0 + (h.x1 - h.x0) * u;
+      p.y = h.y0 + (FLOOR_Y[h.f] - h.y0) * u + Math.sin(u * Math.PI) * 0.6;
+      if (u >= 1) {
+        Object.assign(p, { mode: 'ground', f: h.f, y: FLOOR_Y[h.f], x: h.x1, sh: -1, vdir: 0, bounces: 0, want: 0, hop: null });
+        ev(w, 'off', { i: p.i, f: p.f, x: p.x });
+      }
+      return;
+    }
     let lr = inp ? Math.sign(inp.lr || 0) : 0;
     const act = !!(inp && inp.act);
     if (!live) lr = 0;
+    if (p.mode === 'ground') {
+      // ↓ next to a shaft: walk on onto its trampoline (← or → the other way changes your mind)
+      if (inp && inp.down && live && !p.auto && w.sab !== 'noDown') p.auto = shaftNear(w, p);
+      if (p.auto) { if (lr === -p.auto) p.auto = 0; else lr = p.auto; }
+    }
     if (lr) p.face = lr;
     if (p.mode === 'ground') {
       const sp = w.cfg.walk;
@@ -271,13 +290,22 @@
       // off the end of a room: down the shaft
       if (!segAt(p.x)) {
         const k = shaftAt(p.x);
-        if (k >= 0) enterShaft(w, p, k);
+        if (k >= 0) { enterShaft(w, p, k); p.block = lr; p.auto = 0; }
       }
       return;
     }
     if (p.mode === 'shaft') {
-      // ← or → picks the side to get off at the next floor you pass (only a side with a floor counts)
-      if (lr && segBeside(p.sh, lr) >= 0 && w.sab !== 'stuckShaft') p.want = lr;
+      // A fresh ← or → after the first bounce hops you off right away onto the nearest floor on that side (only a side
+      // with a floor counts). A key already down when you came in, or pressed while dropping, doesn't count until it's
+      // let go. (The sabotages bring back the old ways: the key you came in with gets you off at the next floor you
+      // pass, which walked you straight across; or a press waits for the next floor.)
+      if (w.sab === 'holdThrough') { if (lr && segBeside(p.sh, lr) >= 0) p.want = lr; }
+      else if (!lr) p.block = 0;
+      else if (lr !== p.block) {
+        if (p.armed && segBeside(p.sh, lr) >= 0 && w.sab !== 'stuckShaft') { if (w.sab === 'waitFloor') p.want = lr; else hopOff(w, p, lr); }
+        p.block = lr;
+      }
+      if (p.mode === 'hop') return;
       p.x += Math.max(-6 * DT, Math.min(6 * DT, SX[p.sh] - p.x));
       const res = shaftMove(w, p, w.cfg.vspeed);
       if (res === 'land') {
@@ -299,6 +327,32 @@
         ev(w, 'off', { i: p.i, f: p.f, x: p.x });
       }
     }
+  }
+  // off the trampoline sideways, onto the floor level nearest you on that side (a tie goes the way you're bouncing)
+  function hopOff(w, p, side) {
+    let f = 0;
+    for (let q = 1; q < FLOOR_Y.length; q++) {
+      const d = Math.abs(FLOOR_Y[q] - p.y), b = Math.abs(FLOOR_Y[f] - p.y);
+      if (d < b - 1e-6 || (Math.abs(d - b) < 1e-6 && (FLOOR_Y[q] - p.y) * (p.vdir || -1) > 0)) f = q;
+    }
+    p.mode = 'hop';
+    p.face = side;
+    p.hop = { t: 0, x0: p.x, y0: p.y, x1: edgeOf(p.sh, side) + side * 0.45, f, side };
+    ev(w, 'hop', { i: p.i, f, side, x: p.x, y: p.y });
+  }
+  // ↓ on a floor: the shaft whose edge is close by, with no closed door in between (-1 left, 1 right, 0 none)
+  function shaftNear(w, p) {
+    const sg = segAt(p.x);
+    if (!sg) return 0;
+    let best = 0, bd = DOWN_REACH;
+    for (const [edge, dir] of [[sg.x0, -1], [sg.x1, 1]]) {
+      const d = Math.abs(p.x - edge);
+      if (d > bd) continue;
+      if (closedOn(w, p.f).some((q) => (q.x - p.x) * dir > 0 && (edge - q.x) * dir > 0)) continue;
+      best = dir;
+      bd = d;
+    }
+    return best;
   }
   function enterShaft(w, o, k) {
     o.mode = 'shaft';
@@ -620,18 +674,18 @@
   // tests: stand mouse i on floor f at x; put him in shaft k at height y going dir
   function put(w, i, f, x) {
     const p = w.players[i || 0];
-    Object.assign(p, { x, y: FLOOR_Y[f], f, sh: -1, mode: 'ground', vdir: 0, bounces: 0, armed: false, want: 0, inv: 0, t: 0 });
+    Object.assign(p, { x, y: FLOOR_Y[f], f, sh: -1, mode: 'ground', vdir: 0, bounces: 0, armed: false, want: 0, block: 0, auto: 0, inv: 0, t: 0 });
     return p;
   }
   function putShaft(w, i, k, y, vdir, armed) {
     const p = w.players[i || 0];
-    Object.assign(p, { x: SX[k], y, sh: k, mode: 'shaft', vdir: vdir || 1, hang: 0, bounces: 0, armed: armed !== false, want: 0, inv: 0, t: 0 });
+    Object.assign(p, { x: SX[k], y, sh: k, mode: 'shaft', vdir: vdir || 1, hang: 0, bounces: 0, armed: armed !== false, want: 0, block: 0, auto: 0, inv: 0, t: 0 });
     return p;
   }
 
   MM.sim = {
     DT, PR, CR, REACH, SWING, KNOCK, CATCH_R, TOY_R, WAVE_V, READY, CLEAR_T, HUG_T, PLOP_T, B_TREAT, B_GO, B_OPEN, B_END, SCORE, CFG, TREATS, WEAR, HATCH,
     create, step, call, loadStage, addCat, put, putShaft, rooms, roomAt, field, route, shaftExit, catTargets, nextFloor, segAt, shaftAt, segBeside, edgeOf,
-    useDoor, openDoor, nearDoor, catSpeed, vcost,
+    useDoor, openDoor, nearDoor, catSpeed, vcost, shaftNear, HOP_T,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

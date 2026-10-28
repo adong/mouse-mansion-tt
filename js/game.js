@@ -39,7 +39,7 @@
 
   const G = {
     screen: 'loading', w: null, demo: false, paused: false, hold: false, autoPause: true,
-    keys: {}, taps: [{}, {}], touch: [{ l: 0, r: 0 }, { l: 0, r: 0 }], actBuf: [0, 0], acc: 0, time: 0,
+    keys: {}, taps: [{}, {}], touch: [{ l: 0, r: 0 }, { l: 0, r: 0 }], actBuf: [0, 0], downBuf: [0, 0], acc: 0, time: 0,
     players: 1, who: 'teddy', level: 'easy', sab: null, botInp: null, botK: 0,
     scene2: null, overT: 0, newRows: [], frame: 0, k: 1, landT: [9, 9, 9, 9], hatchT: [9, 9, 9], cheerT: 0,
   };
@@ -156,7 +156,7 @@
   // ---------- games ----------
   function newWorld(demo) {
     const who = demo ? ['teddy'] : G.players === 2 ? ['teddy', 'tommy'] : [G.who];
-    const w = S.create({ level: demo ? 'easy' : G.level, players: who, seed: (Math.random() * 1e9) | 0, buddyFor: (id) => Kit.roster.buddyFor(id), sabotage: G.sab === 'stuckShaft' && !demo ? G.sab : null });
+    const w = S.create({ level: demo ? 'easy' : G.level, players: who, seed: (Math.random() * 1e9) | 0, buddyFor: (id) => Kit.roster.buddyFor(id), sabotage: ['stuckShaft', 'holdThrough', 'waitFloor'].includes(G.sab) && !demo ? G.sab : null });
     if (demo) w.players[0].safe = true;
     return w;
   }
@@ -184,6 +184,7 @@
     G.taps = [{}, {}];
     G.touch = [{ l: 0, r: 0 }, { l: 0, r: 0 }];
     G.actBuf = [0, 0];
+    G.downBuf = [0, 0];
     document.querySelectorAll('#touch .down').forEach((b) => b.classList.remove('down'));
   }
   function setupBud() {
@@ -284,11 +285,13 @@
   }
 
   // ---------- keys and touch ----------
-  // 1 player: every walk and door key moves him. 2 players: Teddy A D W, Tommy ← → ↑.
+  // 1 player: every walk, door and ↓ key moves him. 2 players: Teddy A D W S, Tommy ← → ↑ ↓.
   const ONE = { ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
-  const ACT1 = ['Space', 'ArrowUp', 'KeyW', 'KeyJ', 'KeyK', 'KeyX', 'ArrowDown', 'KeyS'];
+  const ACT1 = ['Space', 'ArrowUp', 'KeyW', 'KeyJ', 'KeyK', 'KeyX'];
+  const DOWN1 = ['ArrowDown', 'KeyS'];
   const TWO = { KeyA: [0, 'l'], KeyD: [0, 'r'], ArrowLeft: [1, 'l'], ArrowRight: [1, 'r'] };
-  const ACT2 = { KeyW: 0, Space: 0, KeyF: 0, KeyS: 0, ArrowUp: 1, ArrowDown: 1, KeyL: 1, Slash: 1 };
+  const ACT2 = { KeyW: 0, Space: 0, KeyF: 0, ArrowUp: 1, KeyL: 1, Slash: 1 };
+  const DOWN2 = { KeyS: 0, ArrowDown: 1 };
   function held(i, d) {
     const two = G.w && G.w.two;
     for (const c in G.keys) {
@@ -301,9 +304,10 @@
     const out = [0, 1].map((i) => {
       let lr = (held(i, 'r') ? 1 : 0) - (held(i, 'l') ? 1 : 0);
       if (G.sab === 'mirror') lr = -lr; // the play check's own sabotages
-      const act = G.actBuf[i] > 0;
+      const act = G.actBuf[i] > 0, down = G.downBuf[i] > 0;
       G.actBuf[i] = 0;
-      return { lr, act };
+      G.downBuf[i] = 0;
+      return { lr, act, down };
     });
     G.taps = [{}, {}];
     return out;
@@ -311,6 +315,10 @@
   function actKey(c) {
     if (G.w && G.w.two) return c in ACT2 ? ACT2[c] : -1;
     return ACT1.includes(c) ? 0 : -1;
+  }
+  function downKey(c) {
+    if (G.w && G.w.two) return c in DOWN2 ? DOWN2[c] : -1;
+    return DOWN1.includes(c) ? 0 : -1;
   }
   function setupUI() {
     const logo = () => {
@@ -379,6 +387,8 @@
         if ((c === 'KeyT' || (c === 'Enter' && !G.w.two) || c === 'NumpadEnter') && !e.repeat) { call(); return; }
         const j = actKey(c);
         if (j >= 0) { if (!e.repeat) G.actBuf[j] = 1; return; }
+        const dn = downKey(c);
+        if (dn >= 0) { if (!e.repeat) G.downBuf[dn] = 1; return; }
         G.keys[c] = true;
         // a tap shorter than a frame still moves
         if (G.w.two) { if (TWO[c]) G.taps[TWO[c][0]][TWO[c][1]] = true; } else if (ONE[c]) G.taps[0][ONE[c]] = true;
@@ -467,6 +477,7 @@
           G.landT[e.sh] = 0;
           if (e.worn >= S.WEAR) { snd(SFX.worn); pop(e.x, LV.TRAMP_Y + 1.6, 'LAST BOUNCE!', 'ouch'); }
           else snd(SFX.boing, e.n);
+          if (e.n === 1) pop(e.x, LV.TRAMP_Y + 1.5, 'BOING!', 'cool');
           break;
         case 'catBounce': G.landT[e.sh] = 0; break;
         case 'tear': snd(SFX.tear); pop(e.x, LV.TRAMP_Y + 1.4, 'RIIIP! PLOP!', 'ouch'); break;
@@ -692,8 +703,7 @@
       } else if (p.mode === 'shaft') {
         mode = p.vdir > 0 ? 'jumpshot' : 'jump';
         want = PI;
-        if (p.want) want = p.want > 0 ? FACE_R : FACE_L;
-      }
+      } else if (p.mode === 'hop') mode = 'jump';
       if (cheering && p.mode === 'ground') { mode = signature(p.who, w.li); ph = G.time * 8; want = PI; }
       if (w.buddy && w.buddy.kind === 'hi5' && w.buddy.t < 0.9) { mode = 'give'; want = p.i ? FACE_L : FACE_R; }
       if (p.mode === 'hug' || p.mode === 'plop') {

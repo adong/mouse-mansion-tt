@@ -40,9 +40,9 @@
   }));
   MM.levels = {
     FLOOR_Y, WALL, SX, SW, SEGS, DOOR_X, KINDS, LEVELS,
-    TRAMP_Y: -0.9, // a trampoline's top: the shafts go down past the ground floor into the basement
+    TRAMP_Y: -0.2, // a trampoline's top: level with the ground floor, so it's the next step along it
     APEX_Y: 9.65, // a bounce tops out just over the top floor
-    PILLOW_Y: -2.3, // a torn trampoline drops you onto the basement pillow
+    PILLOW_Y: -2.45, // a torn trampoline drops you onto the pillow in the basement under it
     ROOF_Y: 11.2,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

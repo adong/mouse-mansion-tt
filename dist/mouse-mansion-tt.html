@@ -271,6 +271,13 @@
     .row > span.h { display: none; }
     .opt small { display: none; }
   }
+  /* short laptop windows: a tighter keys box so the title fits */
+  @media (max-height: 700px) {
+    .keys { font-size: 12px; gap: 1px 12px; padding: 6px 12px; }
+    kbd { height: 19px; min-width: 19px; font-size: 11px; }
+    .screen { gap: 6px; }
+    .logo .l1 { font-size: clamp(30px, min(7vw, 10vh), 90px); }
+  }
   /* short screens (phones sideways), last so it wins: everything tightens up to fit without scrolling */
   @media (max-height: 460px) {
     .credit { display: none; }
@@ -356,13 +363,14 @@
   <button class="btn pulse" id="startBtn">▶ BOUNCE!</button>
   <p class="hiline" id="titleHi"></p>
   <div class="keys">
-    <span>walk</span><span><kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd></span>
+    <span>walk · hop off a trampoline</span><span><kbd>←</kbd><kbd>→</kbd> or <kbd>A</kbd><kbd>D</kbd></span>
+    <span>step onto a trampoline</span><span><kbd>↓</kbd> or <kbd>S</kbd></span>
     <span>open or close a door</span><span><kbd>Space</kbd> <kbd>↑</kbd> <kbd>W</kbd></span>
-    <span>2 players</span><span><b>Teddy</b> <kbd>A</kbd><kbd>D</kbd><kbd>W</kbd> · <b>Tommy</b> <kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd></span>
+    <span>2 players</span><span><b>Teddy</b> <kbd>A</kbd><kbd>D</kbd><kbd>S</kbd><kbd>W</kbd> · <b>Tommy</b> <kbd>←</kbd><kbd>→</kbd><kbd>↓</kbd><kbd>↑</kbd></span>
     <span>call your brother</span><span><kbd>T</kbd></span>
     <span>pause · sound</span><span><kbd>P</kbd> · <kbd>M</kbd></span>
   </div>
-  <p class="touch-hint">◀ ▶ walk, and in a shaft they pick the side you hop off. 🚪 opens a door into a cat: BONK! Tap your brother's face to call him!</p>
+  <p class="touch-hint">◀ ▶ walk onto a trampoline, and while you bounce they hop you off that way. 🚪 opens a door into a cat: BONK! Tap your brother's face to call him!</p>
   <div class="credit">built with <b>Claude Code</b></div>
 </div>
 <div id="pause" class="screen hidden">
@@ -2014,9 +2022,9 @@
   }));
   MM.levels = {
     FLOOR_Y, WALL, SX, SW, SEGS, DOOR_X, KINDS, LEVELS,
-    TRAMP_Y: -0.9, // a trampoline's top: the shafts go down past the ground floor into the basement
+    TRAMP_Y: -0.2, // a trampoline's top: level with the ground floor, so it's the next step along it
     APEX_Y: 9.65, // a bounce tops out just over the top floor
-    PILLOW_Y: -2.3, // a torn trampoline drops you onto the basement pillow
+    PILLOW_Y: -2.45, // a torn trampoline drops you onto the pillow in the basement under it
     ROOF_Y: 11.2,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -2024,9 +2032,10 @@
 </script>
 <script>
 /* TT Mouse Mansion: the rules, with no drawing, in fixed 1/60 s steps (the page, the autopilot and the checks all run these).
-   - Mice (Teddy and Tommy in mouse ears) walk along the floors. Walking off a room's end drops you down a shaft onto
-     its trampoline: you bounce up and down the shaft, and pressing ← or → gets you off at the next floor you pass on
-     that side. On NORMAL a trampoline wears out: come down on it a fifth time in a row and it tears, and you plop onto
+   - Mice (Teddy and Tommy in mouse ears) walk along the floors. Walking off a room's end (or ↓ next to a shaft) puts
+     you down the shaft onto its trampoline: you bounce up and down the shaft, and pressing ← or → after the first
+     bounce hops you off right away, onto the nearest floor on that side. The key you walked in with doesn't count
+     until you let go of it, so holding → walks you onto a trampoline, never across it. On NORMAL a trampoline wears out: come down on it a fifth time in a row and it tears, and you plop onto
      the basement pillow (a life). On EASY it never tears. Getting off onto a floor resets the count.
    - Doors: the door key opens or closes the door next to you. It swings away from you; a cat in its way is bonked
      (dizzy, knocked back). A glowing door also sends a bubble wave along its floor: every cat ahead of it on that floor
@@ -2044,10 +2053,10 @@
   const { FLOOR_Y, WALL, SX, SW, SEGS, TRAMP_Y, APEX_Y, PILLOW_Y } = LV;
   const DT = 1 / 60;
   const PR = 0.34, CR = 0.4; // a mouse's and a cat's half width
-  const DOOR_HALF = 0.2, REACH = 1.6, SWING = 2.0, KNOCK = 2.7;
+  const DOOR_HALF = 0.2, REACH = 1.6, DOWN_REACH = 1.8, SWING = 2.0, KNOCK = 2.7;
   const CATCH_R = 0.72, TOY_R = 0.7;
   const WAVE_V = 12, WAVE_REACH = 1.3; // the bubble wave's speed, and how far above or below its floor it scoops a cat in a shaft
-  const HANG = 0.16, EXIT_EPS = 0.06;
+  const HANG = 0.16, EXIT_EPS = 0.06, HOP_T = 0.28;
   const READY = 1.5, CLEAR_T = 3.2, HUG_T = 1.6, PLOP_T = 1.7, ARRIVE_T = 0.6, SWEPT_UP = 1.4;
   const B_TREAT = 0.6, B_GO = 1.0, B_OPEN = 1.7, B_END = 2.7; // the brother's visit
   const TREATS = ['🍦', '💧', '🧃', '🍪', '🍉', '🍌'];
@@ -2083,7 +2092,7 @@
   }
   function rand(w) { w.rng = (Math.imul(w.rng ^ (w.rng >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) >>> 0; return (w.rng & 0xffffff) / 0x1000000; }
   function newPlayer(who, i, lives) {
-    return { i, who, score: 0, lives, out: false, extra: false, x: 0, y: 0, f: 0, sh: -1, mode: 'ground', vdir: 0, hang: 0, bounces: 0, armed: false, want: 0, face: 1, t: 0, inv: 0, walkT: 0, lastToy: null, toys: 0, safe: false, act: false };
+    return { i, who, score: 0, lives, out: false, extra: false, x: 0, y: 0, f: 0, sh: -1, mode: 'ground', vdir: 0, hang: 0, bounces: 0, armed: false, want: 0, block: 0, auto: 0, face: 1, t: 0, inv: 0, walkT: 0, lastToy: null, toys: 0, safe: false, act: false };
   }
   const startX = (w, p) => (w.two ? (p.i ? 1.5 : -1.5) : -1.5);
 
@@ -2108,7 +2117,7 @@
     if (!first) ev(w, 'stage', { li: w.li });
   }
   function placeStart(w, p) {
-    p.x = startX(w, p); p.y = 0; p.f = 0; p.sh = -1; p.mode = 'ground'; p.vdir = 0; p.bounces = 0; p.armed = false; p.want = 0;
+    p.x = startX(w, p); p.y = 0; p.f = 0; p.sh = -1; p.mode = 'ground'; p.vdir = 0; p.bounces = 0; p.armed = false; p.want = 0; p.block = 0; p.auto = 0;
     p.face = p.x < 0 ? 1 : -1;
   }
 
@@ -2278,9 +2287,27 @@
       }
       return;
     }
+    if (p.mode === 'hop') {
+      // a quick hop sideways out of the shaft onto the floor
+      const h = p.hop;
+      h.t += DT;
+      const u = Math.min(1, h.t / HOP_T);
+      p.x = h.x0 + (h.x1 - h.x0) * u;
+      p.y = h.y0 + (FLOOR_Y[h.f] - h.y0) * u + Math.sin(u * Math.PI) * 0.6;
+      if (u >= 1) {
+        Object.assign(p, { mode: 'ground', f: h.f, y: FLOOR_Y[h.f], x: h.x1, sh: -1, vdir: 0, bounces: 0, want: 0, hop: null });
+        ev(w, 'off', { i: p.i, f: p.f, x: p.x });
+      }
+      return;
+    }
     let lr = inp ? Math.sign(inp.lr || 0) : 0;
     const act = !!(inp && inp.act);
     if (!live) lr = 0;
+    if (p.mode === 'ground') {
+      // ↓ next to a shaft: walk on onto its trampoline (← or → the other way changes your mind)
+      if (inp && inp.down && live && !p.auto && w.sab !== 'noDown') p.auto = shaftNear(w, p);
+      if (p.auto) { if (lr === -p.auto) p.auto = 0; else lr = p.auto; }
+    }
     if (lr) p.face = lr;
     if (p.mode === 'ground') {
       const sp = w.cfg.walk;
@@ -2296,13 +2323,22 @@
       // off the end of a room: down the shaft
       if (!segAt(p.x)) {
         const k = shaftAt(p.x);
-        if (k >= 0) enterShaft(w, p, k);
+        if (k >= 0) { enterShaft(w, p, k); p.block = lr; p.auto = 0; }
       }
       return;
     }
     if (p.mode === 'shaft') {
-      // ← or → picks the side to get off at the next floor you pass (only a side with a floor counts)
-      if (lr && segBeside(p.sh, lr) >= 0 && w.sab !== 'stuckShaft') p.want = lr;
+      // A fresh ← or → after the first bounce hops you off right away onto the nearest floor on that side (only a side
+      // with a floor counts). A key already down when you came in, or pressed while dropping, doesn't count until it's
+      // let go. (The sabotages bring back the old ways: the key you came in with gets you off at the next floor you
+      // pass, which walked you straight across; or a press waits for the next floor.)
+      if (w.sab === 'holdThrough') { if (lr && segBeside(p.sh, lr) >= 0) p.want = lr; }
+      else if (!lr) p.block = 0;
+      else if (lr !== p.block) {
+        if (p.armed && segBeside(p.sh, lr) >= 0 && w.sab !== 'stuckShaft') { if (w.sab === 'waitFloor') p.want = lr; else hopOff(w, p, lr); }
+        p.block = lr;
+      }
+      if (p.mode === 'hop') return;
       p.x += Math.max(-6 * DT, Math.min(6 * DT, SX[p.sh] - p.x));
       const res = shaftMove(w, p, w.cfg.vspeed);
       if (res === 'land') {
@@ -2324,6 +2360,32 @@
         ev(w, 'off', { i: p.i, f: p.f, x: p.x });
       }
     }
+  }
+  // off the trampoline sideways, onto the floor level nearest you on that side (a tie goes the way you're bouncing)
+  function hopOff(w, p, side) {
+    let f = 0;
+    for (let q = 1; q < FLOOR_Y.length; q++) {
+      const d = Math.abs(FLOOR_Y[q] - p.y), b = Math.abs(FLOOR_Y[f] - p.y);
+      if (d < b - 1e-6 || (Math.abs(d - b) < 1e-6 && (FLOOR_Y[q] - p.y) * (p.vdir || -1) > 0)) f = q;
+    }
+    p.mode = 'hop';
+    p.face = side;
+    p.hop = { t: 0, x0: p.x, y0: p.y, x1: edgeOf(p.sh, side) + side * 0.45, f, side };
+    ev(w, 'hop', { i: p.i, f, side, x: p.x, y: p.y });
+  }
+  // ↓ on a floor: the shaft whose edge is close by, with no closed door in between (-1 left, 1 right, 0 none)
+  function shaftNear(w, p) {
+    const sg = segAt(p.x);
+    if (!sg) return 0;
+    let best = 0, bd = DOWN_REACH;
+    for (const [edge, dir] of [[sg.x0, -1], [sg.x1, 1]]) {
+      const d = Math.abs(p.x - edge);
+      if (d > bd) continue;
+      if (closedOn(w, p.f).some((q) => (q.x - p.x) * dir > 0 && (edge - q.x) * dir > 0)) continue;
+      best = dir;
+      bd = d;
+    }
+    return best;
   }
   function enterShaft(w, o, k) {
     o.mode = 'shaft';
@@ -2645,19 +2707,19 @@
   // tests: stand mouse i on floor f at x; put him in shaft k at height y going dir
   function put(w, i, f, x) {
     const p = w.players[i || 0];
-    Object.assign(p, { x, y: FLOOR_Y[f], f, sh: -1, mode: 'ground', vdir: 0, bounces: 0, armed: false, want: 0, inv: 0, t: 0 });
+    Object.assign(p, { x, y: FLOOR_Y[f], f, sh: -1, mode: 'ground', vdir: 0, bounces: 0, armed: false, want: 0, block: 0, auto: 0, inv: 0, t: 0 });
     return p;
   }
   function putShaft(w, i, k, y, vdir, armed) {
     const p = w.players[i || 0];
-    Object.assign(p, { x: SX[k], y, sh: k, mode: 'shaft', vdir: vdir || 1, hang: 0, bounces: 0, armed: armed !== false, want: 0, inv: 0, t: 0 });
+    Object.assign(p, { x: SX[k], y, sh: k, mode: 'shaft', vdir: vdir || 1, hang: 0, bounces: 0, armed: armed !== false, want: 0, block: 0, auto: 0, inv: 0, t: 0 });
     return p;
   }
 
   MM.sim = {
     DT, PR, CR, REACH, SWING, KNOCK, CATCH_R, TOY_R, WAVE_V, READY, CLEAR_T, HUG_T, PLOP_T, B_TREAT, B_GO, B_OPEN, B_END, SCORE, CFG, TREATS, WEAR, HATCH,
     create, step, call, loadStage, addCat, put, putShaft, rooms, roomAt, field, route, shaftExit, catTargets, nextFloor, segAt, shaftAt, segBeside, edgeOf,
-    useDoor, openDoor, nearDoor, catSpeed, vcost,
+    useDoor, openDoor, nearDoor, catSpeed, vcost, shaftNear, HOP_T,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
 
@@ -2665,7 +2727,7 @@
 <script>
 /* TT Mouse Mansion: the autopilot. It plays the title-screen demo and the checks' "every mansion can be cleared" soak.
    It picks the toy that's quickest to reach (the same room-and-shaft map the cats use, doors counted as open), walks
-   there, opens a closed door in its way, and in a shaft presses the side of its floor just as that floor comes up.
+   there, opens a closed door in its way, and in a shaft presses the side of its floor as he bounces past it.
    It never reads keys. */
 (function (root) {
   'use strict';
@@ -2704,7 +2766,7 @@
     }
     if (p.mode === 'shaft' && p.armed) {
       const ex = sim.shaftExit(rs, D, p.sh, vs);
-      if (ex && sim.nextFloor(p) === ex.f) out.lr = ex.side;
+      if (ex && Math.abs(p.y - MM.levels.FLOOR_Y[ex.f]) < 0.9) out.lr = ex.side; // close to his floor: hop off
     }
     return out;
   }
@@ -2721,6 +2783,10 @@
    - doors: opening any door of any mansion bonks the cat in front of it (dizzy, knocked back) and not one behind the
      mouse, one 4 m past the door or one on another floor; a closed door stops cats and mice; a glowing door's wave
      tumbles every cat ahead of it on its floor, and none behind it or on other floors.
+   - gettingOn: walking into any shaft of any mansion from any floor, from either side, holding the key the whole
+     time, puts you on the trampoline bouncing (never across it, never off while you hold); let go and press again and
+     you hop off within half a second onto the nearest floor on that side; ↓ next to a shaft walks you onto it too (not with a closed door in
+     the way, not from the middle of a room).
    - pairs: two toys of the same kind in a row are a PAIR bonus; two different kinds are not.
    - stageEnds: a mansion ends when every toy is collected, not one toy sooner, and the next one loads.
    - catsFindWay: on every mansion, a cat from each room finds a mouse waiting in any other room, along the floors and
@@ -2787,8 +2853,8 @@
           // getting off: each side that has a floor, at the next floor passed going up
           for (const s of [-1, 1]) {
             const w2 = world({ level, sabotage: sab });
-            const q = S().putShaft(w2, 0, k, 1.2, 1, true);
-            run(w2, (ww, i) => ({ lr: i < 3 ? s : 0 }), 60 * 3, () => q.mode === 'shaft');
+            const q = S().putShaft(w2, 0, k, 2.2, 1, true);
+            run(w2, (ww, i) => ({ lr: i < 3 ? s : 0 }), 60 * 3, () => q.mode === 'shaft' || q.mode === 'hop');
             const can = S().segBeside(k, s) >= 0;
             if (can && (q.mode !== 'ground' || q.f !== 1 || Math.sign(q.x - LV().SX[k]) !== s)) bad.push(`${level} shaft ${k} ${s > 0 ? '→' : '←'}: ${q.mode} on floor ${q.f} at ${q.x.toFixed(1)} (wanted floor 1 on that side)`);
             if (!can && q.mode !== 'shaft') bad.push(`${level} shaft ${k}: got off through the wall`);
@@ -2799,7 +2865,7 @@
         const p = S().putShaft(w, 0, 1, 0.5, -1, false);
         let n = 0;
         run(w, {}, 60 * 30, (ww) => { n += ww.events.filter((e) => e.type === 'bounce').length; return n < 3; });
-        run(w, (ww) => ({ lr: S().nextFloor(p) === 0 ? 1 : 0 }), 60 * 8, () => p.mode === 'shaft');
+        run(w, (ww) => ({ lr: p.vdir < 0 && p.y < 1 ? 1 : 0 }), 60 * 8, () => p.mode === 'shaft' || p.mode === 'hop');
         const off = p.mode === 'ground';
         run(w, { lr: -1 }, 30, () => p.mode === 'ground');
         let n2 = 0, torn = false;
@@ -2807,7 +2873,7 @@
         if (!off || torn || n2 < 4) bad.push(`${level}: getting off didn't reset the count (off ${off}, ${n2} more bounces, tore ${torn})`);
         info.push(level === 'normal' ? 'NORMAL: 4 bounces, the 5th landing tears it (a plop, a life)' : 'EASY: never tears');
       }
-      return { ok: !bad.length, info: bad.length ? bad.join('; ') : `every shaft bounces past the top floor and lets you off on either side with a floor at the next floor; ${info.join('; ')}; getting off resets it` };
+      return { ok: !bad.length, info: bad.length ? bad.join('; ') : `every shaft bounces past the top floor and lets you off on either side with a floor (never through a wall); ${info.join('; ')}; getting off resets it` };
     },
 
     doors(sab) {
@@ -2852,8 +2918,13 @@
       const d = w.doors.find((q) => q.f === 1 && q.s === 1);
       S().put(w, 0, 1, d.x - 1.5);
       const c = cat(w, 1, d.x + 1.5);
-      run(w, { lr: 1 }, 120);
-      if (w.players[0].x > d.x - 0.3 || c.x < d.x + 0.3) bad.push(`a closed door let through: mouse at ${w.players[0].x.toFixed(2)}, cat at ${c.x.toFixed(2)} (door ${d.x})`);
+      let crossed = '';
+      run(w, { lr: 1 }, 240, () => {
+        // every step: nobody on floor 1 inside the doorway (the cat may well go round by the shafts)
+        if (w.players[0].x > d.x - 0.3) crossed = `mouse at ${w.players[0].x.toFixed(2)}`;
+        if (c.st === 'walk' && c.f === 1 && Math.abs(c.x - d.x) < 0.3) crossed = `cat at ${c.x.toFixed(2)}`;
+      });
+      if (crossed) bad.push(`a closed door let through: ${crossed} (door ${d.x})`);
       // the glowing door's wave
       let waves = 0;
       for (const { li, di, d: gd } of DOORS().filter((q) => q.d.glow)) {
@@ -2878,6 +2949,69 @@
         }
       }
       return { ok: !bad.length, info: bad.length ? bad.join('; ') : `${n} door openings (every door of all 6 mansions, from both sides): the cat in front bonked, none behind, 4 m past or upstairs; closed doors stop cats and mice; ${waves} glowing-door waves tumble every cat ahead on the floor and nobody else` };
+    },
+
+    gettingOn(sab) {
+      const bad = [];
+      let n = 0;
+      const sim = S();
+      for (const level of ['easy', 'normal']) {
+        for (let li = 0; li < 6; li++) {
+          for (let f = 0; f < 4; f++) {
+            for (let k = 0; k < 4; k++) {
+              for (const side of [-1, 1]) {
+                if (sim.segBeside(k, side) < 0) continue;
+                const w = world({ level, stage: li, sabotage: sab });
+                w.toys.forEach((t) => (t.f = 9));
+                const p = sim.put(w, 0, f, sim.edgeOf(k, side) + side * 1.0);
+                const into = -side; // the shaft is the other way
+                let off = 0, lands = 0, top = -9;
+                // hold the key for 6 s, the way a kid walks
+                run(w, { lr: into }, 360, (ww) => {
+                  for (const e of ww.events) { if (e.type === 'off') off++; if (e.type === 'bounce') lands++; }
+                  if (p.mode === 'shaft') top = Math.max(top, p.y);
+                });
+                n++;
+                const tag = `${level} mansion ${li + 1} floor ${f} shaft ${k} walking ${into > 0 ? '→' : '←'}`;
+                if (p.mode !== 'shaft' || off || lands < 2 || top < FY()[3]) { bad.push(`${tag}: ${p.mode} on floor ${p.f}, got off ${off}, ${lands} bounces, up to ${top.toFixed(1)}`); continue; }
+                // let go, press once toward a side with a floor: off right away, onto the nearest floor there
+                const go = sim.segBeside(k, into) >= 0 ? into : -into;
+                run(w, {}, 2);
+                const y = p.y;
+                let near = 0;
+                for (let q = 1; q < 4; q++) if (Math.abs(FY()[q] - y) < Math.abs(FY()[near] - y)) near = q;
+                run(w, (ww, i) => ({ lr: i < 4 ? go : 0 }), 30, () => p.mode === 'shaft' || p.mode === 'hop');
+                if (p.mode !== 'ground' || Math.sign(p.x - LV().SX[k]) !== go || Math.abs(p.f - near) > 0) bad.push(`${tag}: let go and pressed ${go > 0 ? '→' : '←'} at height ${y.toFixed(1)}: ${p.mode} on floor ${p.f} at ${p.x.toFixed(1)} within half a second`);
+              }
+            }
+          }
+          if (bad.length > 4) break;
+        }
+      }
+      // ↓ next to a shaft (either side) walks you onto it; not from the middle of a room or past a closed door
+      for (let k = 0; k < 4; k++) {
+        for (const side of [-1, 1]) {
+          if (sim.segBeside(k, side) < 0) continue;
+          const w = world({ sabotage: sab });
+          w.doors.forEach((d) => (d.open = true));
+          const p = sim.put(w, 0, 2, sim.edgeOf(k, side) + side * 1.2);
+          let lands = 0;
+          run(w, (ww, i) => ({ down: i === 0 }), 150, (ww) => { lands += ww.events.filter((e) => e.type === 'bounce').length; });
+          if (p.mode !== 'shaft' || !lands) bad.push(`↓ beside shaft ${k}: ${p.mode}, ${lands} bounces`);
+        }
+      }
+      const w = world({ sabotage: sab });
+      const p = sim.put(w, 0, 2, 0.3);
+      w.doors.forEach((d) => (d.open = true));
+      run(w, (ww, i) => ({ down: i === 0 }), 90);
+      if (p.mode !== 'ground' || Math.abs(p.x - 0.3) > 0.01) bad.push(`↓ in the middle of a room moved him (${p.mode} at ${p.x.toFixed(2)})`);
+      const w2 = world({ stage: 0, sabotage: sab });
+      const d = w2.doors.find((q) => q.f === 1 && q.s === 1);
+      d.open = false;
+      const q = sim.put(w2, 0, 1, d.x - 0.9);
+      run(w2, (ww, i) => ({ down: i === 0 }), 90);
+      if (q.mode !== 'shaft') bad.push(`↓ near shaft 1 with the door on the other side: ${q.mode}`);
+      return { ok: !bad.length, info: bad.length ? bad.slice(0, 5).join('; ') : `${n} walks into a shaft holding the key (every mansion, floor, shaft and side, EASY and NORMAL): always on the trampoline bouncing, never across it or off while held; let go and press: off within half a second onto the nearest floor on that side; ↓ beside a shaft walks him on` };
     },
 
     pairs(sab) {
@@ -3031,7 +3165,7 @@
         const q = S().putShaft(w2, 0, k, 2, 1, true);
         run(w2, { lr: -s }, 60 * 3);
         const still = q.mode === 'shaft';
-        run(w2, { lr: s }, 60 * 4, () => q.mode === 'shaft');
+        run(w2, { lr: s }, 60 * 4, () => q.mode === 'shaft' || q.mode === 'hop');
         if (!still || q.mode !== 'ground') bad.push(`shaft ${k} at the wall: ${still ? 'bounced' : 'got off through the wall'}, then ${q.mode}`);
       }
       // a hug, a plop, a cleared mansion: walking again afterwards
@@ -3074,6 +3208,9 @@
     ['noBonk', 'doors', 'doors bonk nobody'],
     ['bonkAll', 'doors', 'a door bonks every cat on the floor'],
     ['noWave', 'doors', 'glowing doors send no wave'],
+    ['holdThrough', 'gettingOn', 'the key you walk in with gets you off again (walks you across a trampoline)'],
+    ['noDown', 'gettingOn', '↓ next to a shaft does nothing'],
+    ['waitFloor', 'gettingOn', '← or → in a shaft waits for the next floor instead of hopping off'],
     ['noPair', 'pairs', 'pairs earn nothing'],
     ['pairAlways', 'pairs', 'any two toys are a pair'],
     ['neverClear', 'stageEnds', 'a mansion never ends'],
@@ -3243,6 +3380,14 @@
     for (const x of SX) {
       box(SW * 2 - 0.1, ROOF_Y + 2.6 - 0.3, 0.06, shaftM, x, (ROOF_Y - 0.3 - 2.6) / 2, -1.22, root);
       for (let y = -2; y < ROOF_Y - 0.6; y += 0.9) box(0.18, 0.18, 0.04, dotM, x, y, -1.17, root);
+      // up-and-down arrows at every floor: this gap is where you bounce
+      for (let f = 0; f < 4; f++) {
+        const e = A.emoji('↕️', 0.8);
+        e.material.depthTest = true;
+        e.renderOrder = 0;
+        e.position.set(x, FLOOR_Y[f] + 1.3, -1.1);
+        root.add(e);
+      }
     }
     // outer walls and corner posts
     const post = mat('#fff4e0', { roughness: 0.7 });
@@ -3315,19 +3460,20 @@
   };
 
   // ---------- trampolines at the bottom of each shaft ----------
+  // its mat sits level with the ground floor, in the gap between the rooms: the next step along the floor
   A.trampoline = function () {
     const g = new T.Group();
     const red = mat('#ff4d6d'), blue = mat('#3d6ad6');
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.14, 0.75, 0.14, sx > 0 ? red : blue, sx * 0.62, -0.38, sz * 0.75, g);
-    box(1.45, 0.14, 0.14, red, 0, -0.06, 0.78, g);
-    box(1.45, 0.14, 0.14, red, 0, -0.06, -0.78, g);
-    const matM = new T.MeshStandardMaterial({ color: A.WEAR_COLORS[0], roughness: 0.5 });
-    const mt = box(1.3, 0.1, 1.5, matM, 0, -0.04, 0, g);
-    const springs = [];
-    for (let i = 0; i < 5; i++) springs.push(box(0.05, 0.05, 0.12, mat('#cccccc', { metalness: 0.6, roughness: 0.3 }), -0.5 + i * 0.25, -0.06, 0.7, g));
-    // the pillow under it, for a soft landing if it tears
-    const pillow = box(1.6, 0.5, 1.6, mat('#ffe1ef', { roughness: 0.9 }), 0, -1.45, 0, g);
-    pillow.scale.set(1, 1, 1);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.16, 2.6, 0.16, sx > 0 ? red : blue, sx * 0.68, -1.38, sz * 0.82, g);
+    box(1.56, 0.16, 0.16, red, 0, -0.08, 0.86, g);
+    box(1.56, 0.16, 0.16, red, 0, -0.08, -0.86, g);
+    box(0.16, 0.16, 1.8, blue, -0.72, -0.08, 0, g);
+    box(0.16, 0.16, 1.8, blue, 0.72, -0.08, 0, g);
+    const matM = new T.MeshStandardMaterial({ color: A.WEAR_COLORS[0], roughness: 0.5, emissive: '#ffffff', emissiveIntensity: 0.08 });
+    const mt = box(1.32, 0.1, 1.6, matM, 0, -0.04, 0, g);
+    for (let i = 0; i < 5; i++) box(0.05, 0.05, 0.12, mat('#cccccc', { metalness: 0.6, roughness: 0.3 }), -0.5 + i * 0.25, -0.08, 0.78, g);
+    // the pillow under it on the basement floor, for a soft landing if it tears
+    const pillow = box(1.5, 0.5, 1.6, mat('#ffe1ef', { roughness: 0.9 }), 0, -2.5, 0, g);
     const patch = box(0.5, 0.11, 0.5, mat('#ffffff'), 0, -0.03, 0.2, g);
     patch.visible = false;
     g.userData = { mat: mt, matM, patch, pillow };
@@ -3687,7 +3833,7 @@
 
   const G = {
     screen: 'loading', w: null, demo: false, paused: false, hold: false, autoPause: true,
-    keys: {}, taps: [{}, {}], touch: [{ l: 0, r: 0 }, { l: 0, r: 0 }], actBuf: [0, 0], acc: 0, time: 0,
+    keys: {}, taps: [{}, {}], touch: [{ l: 0, r: 0 }, { l: 0, r: 0 }], actBuf: [0, 0], downBuf: [0, 0], acc: 0, time: 0,
     players: 1, who: 'teddy', level: 'easy', sab: null, botInp: null, botK: 0,
     scene2: null, overT: 0, newRows: [], frame: 0, k: 1, landT: [9, 9, 9, 9], hatchT: [9, 9, 9], cheerT: 0,
   };
@@ -3804,7 +3950,7 @@
   // ---------- games ----------
   function newWorld(demo) {
     const who = demo ? ['teddy'] : G.players === 2 ? ['teddy', 'tommy'] : [G.who];
-    const w = S.create({ level: demo ? 'easy' : G.level, players: who, seed: (Math.random() * 1e9) | 0, buddyFor: (id) => Kit.roster.buddyFor(id), sabotage: G.sab === 'stuckShaft' && !demo ? G.sab : null });
+    const w = S.create({ level: demo ? 'easy' : G.level, players: who, seed: (Math.random() * 1e9) | 0, buddyFor: (id) => Kit.roster.buddyFor(id), sabotage: ['stuckShaft', 'holdThrough', 'waitFloor'].includes(G.sab) && !demo ? G.sab : null });
     if (demo) w.players[0].safe = true;
     return w;
   }
@@ -3832,6 +3978,7 @@
     G.taps = [{}, {}];
     G.touch = [{ l: 0, r: 0 }, { l: 0, r: 0 }];
     G.actBuf = [0, 0];
+    G.downBuf = [0, 0];
     document.querySelectorAll('#touch .down').forEach((b) => b.classList.remove('down'));
   }
   function setupBud() {
@@ -3932,11 +4079,13 @@
   }
 
   // ---------- keys and touch ----------
-  // 1 player: every walk and door key moves him. 2 players: Teddy A D W, Tommy ← → ↑.
+  // 1 player: every walk, door and ↓ key moves him. 2 players: Teddy A D W S, Tommy ← → ↑ ↓.
   const ONE = { ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
-  const ACT1 = ['Space', 'ArrowUp', 'KeyW', 'KeyJ', 'KeyK', 'KeyX', 'ArrowDown', 'KeyS'];
+  const ACT1 = ['Space', 'ArrowUp', 'KeyW', 'KeyJ', 'KeyK', 'KeyX'];
+  const DOWN1 = ['ArrowDown', 'KeyS'];
   const TWO = { KeyA: [0, 'l'], KeyD: [0, 'r'], ArrowLeft: [1, 'l'], ArrowRight: [1, 'r'] };
-  const ACT2 = { KeyW: 0, Space: 0, KeyF: 0, KeyS: 0, ArrowUp: 1, ArrowDown: 1, KeyL: 1, Slash: 1 };
+  const ACT2 = { KeyW: 0, Space: 0, KeyF: 0, ArrowUp: 1, KeyL: 1, Slash: 1 };
+  const DOWN2 = { KeyS: 0, ArrowDown: 1 };
   function held(i, d) {
     const two = G.w && G.w.two;
     for (const c in G.keys) {
@@ -3949,9 +4098,10 @@
     const out = [0, 1].map((i) => {
       let lr = (held(i, 'r') ? 1 : 0) - (held(i, 'l') ? 1 : 0);
       if (G.sab === 'mirror') lr = -lr; // the play check's own sabotages
-      const act = G.actBuf[i] > 0;
+      const act = G.actBuf[i] > 0, down = G.downBuf[i] > 0;
       G.actBuf[i] = 0;
-      return { lr, act };
+      G.downBuf[i] = 0;
+      return { lr, act, down };
     });
     G.taps = [{}, {}];
     return out;
@@ -3959,6 +4109,10 @@
   function actKey(c) {
     if (G.w && G.w.two) return c in ACT2 ? ACT2[c] : -1;
     return ACT1.includes(c) ? 0 : -1;
+  }
+  function downKey(c) {
+    if (G.w && G.w.two) return c in DOWN2 ? DOWN2[c] : -1;
+    return DOWN1.includes(c) ? 0 : -1;
   }
   function setupUI() {
     const logo = () => {
@@ -4027,6 +4181,8 @@
         if ((c === 'KeyT' || (c === 'Enter' && !G.w.two) || c === 'NumpadEnter') && !e.repeat) { call(); return; }
         const j = actKey(c);
         if (j >= 0) { if (!e.repeat) G.actBuf[j] = 1; return; }
+        const dn = downKey(c);
+        if (dn >= 0) { if (!e.repeat) G.downBuf[dn] = 1; return; }
         G.keys[c] = true;
         // a tap shorter than a frame still moves
         if (G.w.two) { if (TWO[c]) G.taps[TWO[c][0]][TWO[c][1]] = true; } else if (ONE[c]) G.taps[0][ONE[c]] = true;
@@ -4115,6 +4271,7 @@
           G.landT[e.sh] = 0;
           if (e.worn >= S.WEAR) { snd(SFX.worn); pop(e.x, LV.TRAMP_Y + 1.6, 'LAST BOUNCE!', 'ouch'); }
           else snd(SFX.boing, e.n);
+          if (e.n === 1) pop(e.x, LV.TRAMP_Y + 1.5, 'BOING!', 'cool');
           break;
         case 'catBounce': G.landT[e.sh] = 0; break;
         case 'tear': snd(SFX.tear); pop(e.x, LV.TRAMP_Y + 1.4, 'RIIIP! PLOP!', 'ouch'); break;
@@ -4340,8 +4497,7 @@
       } else if (p.mode === 'shaft') {
         mode = p.vdir > 0 ? 'jumpshot' : 'jump';
         want = PI;
-        if (p.want) want = p.want > 0 ? FACE_R : FACE_L;
-      }
+      } else if (p.mode === 'hop') mode = 'jump';
       if (cheering && p.mode === 'ground') { mode = signature(p.who, w.li); ph = G.time * 8; want = PI; }
       if (w.buddy && w.buddy.kind === 'hi5' && w.buddy.t < 0.9) { mode = 'give'; want = p.i ? FACE_L : FACE_R; }
       if (p.mode === 'hug' || p.mode === 'plop') {
@@ -4563,10 +4719,15 @@
      Tommy and both brothers in 2 players (each with his own keys, and only his), with keys and with the touch buttons.
    - shafts: walking off a floor drops you onto the trampoline; in every shaft → gets you off on the right of the
      screen and ← on the left, keys and touch, on every mansion; toward a wall you keep bouncing.
+   - getting on, the way Alan plays: holding → (or ←) and walking into every shaft from 1 m away, on every floor and
+     both sides of every shaft, on every mansion, puts you on the trampoline bouncing (never across it); the same with
+     tapped keys, a held touch button and ↓; then a fresh press gets you off on that side.
    - doors: the door key (and 🚪) opens the door next to you and bonks the cat in front of it.
    - nothing leaves him stuck: a key held through pause, a lost window, a cancelled touch, a door closed on him, a hug,
      a torn trampoline, the brother's visit, the next mansion, and a "keyboard kid" mashing keys on every mansion.
-   game.playCheck('mirror') and game.playCheck('stuckShaft') prove the check fails when the controls are wrong. */
+   - in a shaft, ← or → hops him off that way right away, going up or coming down, at any height.
+   game.playCheck('mirror'), game.playCheck('stuckShaft'), game.playCheck('holdThrough') (the old walk-across
+   trampolines) and game.playCheck('waitFloor') (the old wait-for-the-next-floor) prove the check fails. */
 (function () {
   'use strict';
   const LV = MM.levels;
@@ -4603,8 +4764,9 @@
   const ROOMS = [-6.8, 0, 6.8];
   // wait in a shaft until he gets off (or give up)
   function untilOff(i, secs) {
-    for (let t = 0; t < secs; t += 0.05) { if (pl(i).mode !== 'shaft') return true; step(0.05); }
-    return pl(i).mode !== 'shaft';
+    const busy = () => pl(i).mode === 'shaft' || pl(i).mode === 'hop';
+    for (let t = 0; t < secs; t += 0.05) { if (!busy()) return true; step(0.05); }
+    return !busy();
   }
 
   function run(sab) {
@@ -4662,7 +4824,7 @@
             const bad = [];
             for (let k = 0; k < 4; k++) {
               for (const s of [1, -1]) {
-                game.putShaft(i, k, 1.2, 1);
+                game.putShaft(i, k, 2.2, 1);
                 step(0.05);
                 const sx0 = game.toScreen(LV.SX[k], 1.5, 0.35)[0];
                 if (how === 'keys') press(s > 0 ? R : L, 0.08); else tap(i, s > 0 ? 'r' : 'l', 0.08);
@@ -4677,6 +4839,105 @@
             ok(`shafts ${players === 2 ? '2P ' + pl(i).who : '1P'} mansion ${stage + 1} ${how}`, !bad.length, bad.length ? bad.slice(0, 3).join('; ') : 'every shaft: → off on the right, ← off on the left, never through a wall');
           }
         }
+      }
+      document.body.classList.toggle('touch', hadTouch);
+
+      // ---------- getting on a trampoline the way Alan plays: hold → (or ←) and walk into every shaft ----------
+      // From 1 m away on every floor, on both sides of every shaft, on every mansion: he must end up on the trampoline
+      // bouncing (up the screen, in the shaft, never past it and never off while the key is down); then a fresh press
+      // gets him off at the next floor on that side. Keys held, keys tapped, touch held, and ↓.
+      const sim = MM.sim;
+      const walkOn = (i, f, k, side, how, R, L) => {
+        const into = -side, dirKey = into > 0 ? R : L, btn = into > 0 ? 'r' : 'l';
+        game.put(i, f, sim.edgeOf(k, side) + side * 1.0);
+        step(0.05);
+        const sy0 = pl(i).sy, shaftSx = game.toScreen(LV.SX[k], 1, 0.35)[0];
+        let lowSy = sy0, upSy = 1e9, bounced = false, off = false, seenIn = false;
+        const el = how === 'touch' ? button(i, btn) : null;
+        const o = { pointerId: 40 + i, bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true };
+        if (how === 'hold') key(dirKey, true);
+        else if (how === 'touch') el.dispatchEvent(new PointerEvent('pointerdown', o));
+        else if (how === 'down') press(i ? 'ArrowDown' : (st().two ? 'KeyS' : 'ArrowDown'), 0.05);
+        for (let t = 0; t < 4; t += 0.05) {
+          if (how === 'tap' && !seenIn && Math.round(t / 0.05) % 3 === 0) { key(dirKey, true); step(0.05); key(dirKey, false); continue; }
+          step(0.05);
+          const q = pl(i);
+          if (q.mode === 'shaft') seenIn = true;
+          if (seenIn && q.mode === 'ground') off = true;
+          if (q.bounces > 0) bounced = true;
+          if (!bounced) lowSy = Math.max(lowSy, q.sy); else upSy = Math.min(upSy, q.sy);
+        }
+        const q = pl(i);
+        // on the trampoline: in the shaft, it bounced him, and he went back up the screen from the bottom
+        const onIt = q.mode === 'shaft' && bounced && !off && lowSy - upSy > 40 && Math.abs(q.sx - shaftSx) < 25;
+        if (how === 'hold') key(dirKey, false);
+        else if (how === 'touch') el.dispatchEvent(new PointerEvent('pointerup', o));
+        step(0.1);
+        // a fresh press toward a side with a floor: off at the next floor, on that side of the screen
+        const go = sim.segBeside(k, into) >= 0 ? into : -into;
+        if (how === 'touch') tap(i, go > 0 ? 'r' : 'l', 0.08); else press(go > 0 ? R : L, 0.08);
+        const gotOff = untilOff(i, 5);
+        const b = pl(i);
+        const offOk = gotOff && Math.sign(b.sx - shaftSx) === go;
+        return { onIt, offOk, info: `${q.mode}${bounced ? ', bounced' : ''}${off ? ', WENT ACROSS' : ''}, back up ${upSy < 1e9 ? lowSy - upSy : 0} px; then ${gotOff ? 'off on the ' + (Math.sign(b.sx - shaftSx) > 0 ? 'right' : 'left') : 'never off'}` };
+      };
+      const ways = [['hold', [0, 1, 2, 3, 4, 5]], ['tap', [0, 3]], ['touch', [0, 5]], ['down', [0, 2, 4]]];
+      for (const [how, stages] of ways) {
+        for (const stage of stages) {
+          for (const [players, i, R, L] of [[1, 0, 'ArrowRight', 'ArrowLeft'], [2, 1, 'ArrowRight', 'ArrowLeft'], [2, 0, 'KeyD', 'KeyA']]) {
+            if (players === 2 && how !== 'hold' && how !== 'touch') continue;
+            document.body.classList.toggle('touch', how === 'touch');
+            fresh(stage, { players, level: stage % 2 ? 'normal' : 'easy' });
+            openAll();
+            if (players === 2) game.put(1 - i, 3, 0);
+            const bad = [];
+            let n = 0;
+            for (let f = 0; f < 4; f++) {
+              for (let k = 0; k < 4; k++) {
+                for (const side of [-1, 1]) {
+                  if (sim.segBeside(k, side) < 0) continue;
+                  const r = walkOn(i, f, k, side, how, R, L);
+                  n++;
+                  if (!r.onIt || !r.offOk) bad.push(`floor ${f} shaft ${k} from the ${side > 0 ? 'right' : 'left'}: ${r.info}`);
+                }
+              }
+            }
+            ok(`get on ${how} ${players === 2 ? '2P ' + pl(i).who : '1P'} mansion ${stage + 1}`, !bad.length, bad.length ? bad.slice(0, 3).join('; ') : `${n} walks into a shaft: on the trampoline and bouncing every time, then off on the side pressed`);
+          }
+        }
+      }
+      document.body.classList.toggle('touch', hadTouch);
+
+      // ← or → while bouncing, going up or coming down, at any height: he goes that way on screen right away
+      for (const [players, i, R, L, how] of [[1, 0, 'ArrowRight', 'ArrowLeft', 'keys'], [1, 0, 'ArrowRight', 'ArrowLeft', 'touch'], [2, 0, 'KeyD', 'KeyA', 'keys'], [2, 1, 'ArrowRight', 'ArrowLeft', 'keys']]) {
+        document.body.classList.toggle('touch', how === 'touch');
+        const bad = [];
+        let n = 0;
+        for (let stage = 0; stage < 6; stage++) {
+          fresh(stage, { players });
+          openAll();
+          for (let k = 0; k < 4; k++) {
+            for (const s of [1, -1]) {
+              if (sim.segBeside(k, s) < 0) continue;
+              for (const y of [1.5, 4.5, 7.4]) {
+                for (const vdir of [1, -1]) {
+                  game.putShaft(i, k, y, vdir);
+                  step(0.02);
+                  const a = pl(i);
+                  if (how === 'touch') tap(i, s > 0 ? 'r' : 'l', 0.05); else press(s > 0 ? R : L, 0.05);
+                  step(0.05);
+                  const b = pl(i);
+                  n++;
+                  const moved = (b.sx - a.sx) * s;
+                  untilOff(i, 2);
+                  const c = pl(i);
+                  if (moved < 12 || c.mode !== 'ground' || Math.sign(c.sx - a.sx) !== s) bad.push(`mansion ${stage + 1} shaft ${k} at ${y} m going ${vdir > 0 ? 'up' : 'down'}, ${s > 0 ? '→' : '←'}: moved ${Math.round(moved)} px that way in 0.12 s, then ${c.mode}`);
+                }
+              }
+            }
+          }
+        }
+        ok(`press in a shaft ${players === 2 ? '2P ' + (i ? 'Tommy' : 'Teddy') : '1P'} ${how}`, !bad.length, bad.length ? bad.slice(0, 3).join('; ') : `${n} presses at heights between the floors, going up and down: he starts hopping off that way within 0.12 s, every time`);
       }
       document.body.classList.toggle('touch', hadTouch);
 
@@ -4809,16 +5070,17 @@
 Kit.help.setup({
   title: MM.TITLE, // the name lives in js/title.js
   keys: [
-    ['walk · in a shaft: get off on that side', '← → or A D'],
+    ['walk · on a trampoline: hop off that way', '← → or A D'],
+    ['step onto the trampoline next to you', '↓ or S'],
     ['open or close the door next to you', 'Space or ↑ or W'],
-    ['2 players: Teddy walks and opens doors', 'A D · W'],
-    ['2 players: Tommy walks and opens doors', '← → · ↑'],
+    ['2 players: Teddy walks, hops on, opens doors', 'A D · S · W'],
+    ['2 players: Tommy walks, hops on, opens doors', '← → · ↓ · ↑'],
     ['call your brother: he opens every door (2 players: high five)', 'T'],
     ['pause · sound', 'P or Esc · M'],
     ['title: 1 or 2 players · easy · normal · who plays', '1 2 · E · N · C'],
   ],
-  note: 'Grab every lost toy to clear the mansion: two of the same kind in a row is a PAIR bonus. Walk off a floor into a shaft to bounce on its trampoline, and press ← or → to hop off at the next floor on that side. On NORMAL a trampoline tears if you come down on it a fifth time in a row. Open a door into a cat to bonk it; a glowing door sends a bubble wave that tumbles every cat ahead of it. Call your brother as often as you like.',
-  touch: '◀ ▶ walk (and pick your side in a shaft), 🚪 opens doors, and your brother\'s face calls him. 2 players: each brother has his own ◀ ▶ 🚪 in his corner.',
+  note: 'Grab every lost toy to clear the mansion: two of the same kind in a row is a PAIR bonus. Walk into a gap with a trampoline (the ↕️ arrows) to bounce on it, or press ↓ next to one. While you bounce, press ← or → to hop off onto the nearest floor that way. On NORMAL a trampoline tears if you come down on it a fifth time in a row. Open a door into a cat to bonk it; a glowing door sends a bubble wave that tumbles every cat ahead of it. Call your brother as often as you like.',
+  touch: '◀ ▶ walk (on a trampoline they hop you off that way), 🚪 opens doors, and your brother\'s face calls him. 2 players: each brother has his own ◀ ▶ 🚪 in his corner.',
 });
 
 </script>
@@ -4840,9 +5102,9 @@ Kit.help.setup({
     'slow cats · trampolines never tear · 5 lives': '猫咪慢 · 蹦床不会破 · 5 条命',
     'faster cats · trampolines wear out · 3 lives': '猫咪快 · 蹦床会磨破 · 3 条命',
     '▶ BOUNCE!': '▶ 开始蹦！',
-    walk: '走路', 'open or close a door': '开门或关门', '2 players': '双人', 'call your brother': '叫兄弟来', 'pause · sound': '暂停 · 声音', or: '或',
-    "◀ ▶ walk, and in a shaft they pick the side you hop off. 🚪 opens a door into a cat: BONK! Tap your brother's face to call him!":
-      '◀ ▶ 走路，在蹦床通道里按它们选从哪边跳下来。🚪 把门推开撞到猫咪：咚！点兄弟的脸叫他来！',
+    'walk · hop off a trampoline': '走路 · 从蹦床上跳下来', 'step onto a trampoline': '跳上蹦床', 'open or close a door': '开门或关门', '2 players': '双人', 'call your brother': '叫兄弟来', 'pause · sound': '暂停 · 声音', or: '或',
+    "◀ ▶ walk onto a trampoline, and while you bounce they hop you off that way. 🚪 opens a door into a cat: BONK! Tap your brother's face to call him!":
+      '◀ ▶ 走上蹦床，蹦的时候再按就往那边跳下来。🚪 把门推开撞到猫咪：咚！点兄弟的脸叫他来！',
     '↻ Turn sideways for a bigger screen!': '↻ 横过来玩，屏幕更大！',
     'built with': '制作工具：',
     Players: '玩家', 'Who plays': '谁来玩', Difficulty: '难度',
@@ -4852,7 +5114,7 @@ Kit.help.setup({
     'Walk left': '往左走', 'Walk right': '往右走',
     // big words, pops, toasts
     'GO!': '出发！', 'GRAB EVERY TOY!': '把玩具都找回来！', 'MANSION CLEAR!': '大宅过关啦！', 'EVERY TOY FOUND!': '玩具全找到啦！', 'GAME OVER': '游戏结束',
-    'LAST BOUNCE!': '最后一蹦！', 'RIIIP! PLOP!': '嘶啦！扑通！', 'BUBBLE WAVE!': '泡泡大浪！', 'HUGGY HUG!': '抱抱！',
+    'BOING!': '蹦！', 'LAST BOUNCE!': '最后一蹦！', 'RIIIP! PLOP!': '嘶啦！扑通！', 'BUBBLE WAVE!': '泡泡大浪！', 'HUGGY HUG!': '抱抱！',
     'ONE MORE TIME!': '再来一次！', 'HIGH FIVE! ✋ +50': '击掌！✋ +50', 'EXTRA LIFE!': '多一条命！',
     // pause, results
     PAUSED: '暂停', '▶ RESUME': '▶ 继续', MENU: '菜单',
@@ -4862,16 +5124,17 @@ Kit.help.setup({
     '⭐ NEW HI-SCORE!': '⭐ 新纪录！', '⭐ ON THE BOARD!': '⭐ 上榜啦！',
     '🐣 TOP MICE': '🐣 小老鼠高手榜', '🔥 TOP MICE': '🔥 小老鼠高手榜',
     // the ? panel
-    'walk · in a shaft: get off on that side': '走路 · 在蹦床通道里：从那边跳下来',
+    'walk · on a trampoline: hop off that way': '走路 · 在蹦床上：往那边跳下来',
+    'step onto the trampoline next to you': '跳上旁边的蹦床',
     'open or close the door next to you': '打开或关上旁边的门',
-    '2 players: Teddy walks and opens doors': '双人：Teddy 走路和开门',
-    '2 players: Tommy walks and opens doors': '双人：Tommy 走路和开门',
+    '2 players: Teddy walks, hops on, opens doors': '双人：Teddy 走路、跳上蹦床、开门',
+    '2 players: Tommy walks, hops on, opens doors': '双人：Tommy 走路、跳上蹦床、开门',
     'call your brother: he opens every door (2 players: high five)': '叫兄弟来：他把所有的门都打开（双人：击掌）',
     'title: 1 or 2 players · easy · normal · who plays': '标题页：1 或 2 个人 · 简单 · 普通 · 换人',
-    'Grab every lost toy to clear the mansion: two of the same kind in a row is a PAIR bonus. Walk off a floor into a shaft to bounce on its trampoline, and press ← or → to hop off at the next floor on that side. On NORMAL a trampoline tears if you come down on it a fifth time in a row. Open a door into a cat to bonk it; a glowing door sends a bubble wave that tumbles every cat ahead of it. Call your brother as often as you like.':
-      '把丢了的玩具全找回来就过关：连着拿到两个一样的玩具有“一对”奖励。从地板走进通道，就会在蹦床上蹦；按 ← 或 →，到下一层就从那边跳下来。普通难度下，连着第五次落到同一个蹦床上，它会破掉。把门推开撞到猫咪，就能把它弹开；发光的门会放出泡泡大浪，把前面的猫咪全都冲走。兄弟想叫几次就叫几次。',
-    "◀ ▶ walk (and pick your side in a shaft), 🚪 opens doors, and your brother's face calls him. 2 players: each brother has his own ◀ ▶ 🚪 in his corner.":
-      '◀ ▶ 走路（在通道里选从哪边下来），🚪 开门，点兄弟的脸叫他来。双人：兄弟俩在自己那边的角落各有一组 ◀ ▶ 🚪。',
+    'Grab every lost toy to clear the mansion: two of the same kind in a row is a PAIR bonus. Walk into a gap with a trampoline (the ↕️ arrows) to bounce on it, or press ↓ next to one. While you bounce, press ← or → to hop off onto the nearest floor that way. On NORMAL a trampoline tears if you come down on it a fifth time in a row. Open a door into a cat to bonk it; a glowing door sends a bubble wave that tumbles every cat ahead of it. Call your brother as often as you like.':
+      '把丢了的玩具全找回来就过关：连着拿到两个一样的玩具有“一对”奖励。走进有蹦床的空隙（有 ↕️ 箭头的地方）就会在蹦床上蹦，站在旁边按 ↓ 也能跳上去。蹦的时候按 ← 或 →，就往那边跳到最近的一层。普通难度下，连着第五次落到同一个蹦床上，它会破掉。把门推开撞到猫咪，就能把它弹开；发光的门会放出泡泡大浪，把前面的猫咪全都冲走。兄弟想叫几次就叫几次。',
+    "◀ ▶ walk (on a trampoline they hop you off that way), 🚪 opens doors, and your brother's face calls him. 2 players: each brother has his own ◀ ▶ 🚪 in his corner.":
+      '◀ ▶ 走路（在蹦床上按就往那边跳下来），🚪 开门，点兄弟的脸叫他来。双人：兄弟俩在自己那边的角落各有一组 ◀ ▶ 🚪。',
     'LOADING…': '加载中…',
   });
   const TOY = { '🧸': '小熊', '🤖': '机器人', '🚂': '小火车', '🥁': '小鼓', '🪁': '风筝' };
