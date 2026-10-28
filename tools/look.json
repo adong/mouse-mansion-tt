@@ -1,0 +1,5 @@
+[
+  { "label": "muted", "js": "localStorage.setItem('claudeGames.muted', '1'); localStorage.setItem('claudeGames.lang', 'en'); location.reload(); 'reload'", "wait": 5000 },
+  { "label": "play", "js": "(() => { game.hold(true); game.start({ level: 'easy', go: true }); game.quiet(); const w = game.world(); game.put(0, 1, -5.6); game.cat(1, -0.9); game.cat(2, 5.5); w.cfg = Object.assign({}, w.cfg, { cat: 0 }); game.putShaft(0, 1, 2.2, 1); game.put(0,1,-5.2); game.step(0.6); return 'ok'; })()", "wait": 1600, "shot": "c-play" },
+  { "label": "door open", "js": "(() => { dispatchEvent(new KeyboardEvent('keydown', {code:'Space'})); game.step(0.05); dispatchEvent(new KeyboardEvent('keyup', {code:'Space'})); game.step(0.5); return JSON.stringify(game.state().cats); })()", "shot": "c-door" }
+]

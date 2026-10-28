@@ -27,16 +27,14 @@
     const p = build(look);
     if (!look || !look.mouse) return p;
     const grey = mat('#a9a9bd', { roughness: 0.6 }), pink = mat('#ffb3c7', { roughness: 0.6 });
+    // round ears that read from the side too (the brothers walk side-on), and a little pink nose
     for (const sx of [-1, 1]) {
-      const ear = new T.Mesh(new T.CylinderGeometry(0.19, 0.19, 0.06, 20), grey);
-      ear.rotation.x = Math.PI / 2;
-      ear.position.set(sx * 0.27, 0.36, 0.02);
-      p.head.add(ear);
-      const inner = new T.Mesh(new T.CylinderGeometry(0.12, 0.12, 0.02, 18), pink);
-      inner.rotation.x = Math.PI / 2;
-      inner.position.set(sx * 0.27, 0.36, -0.02);
-      p.head.add(inner);
+      const ear = ball(0.22, grey, sx * 0.26, 0.4, 0.03, p.head);
+      ear.scale.set(1, 1, 0.75);
+      const inner = ball(0.14, pink, sx * 0.26, 0.4, -0.08, p.head);
+      inner.scale.set(1, 1, 0.6);
     }
+    ball(0.06, pink, 0, -0.03, -0.26, p.head);
     box(0.56, 0.06, 0.1, grey, 0, 0.27, 0.02, p.head); // the headband
     const tail = new T.Group();
     tail.position.set(0, -0.05, 0.2);
@@ -233,16 +231,16 @@
     const g = new T.Group();
     const frame = mat('#ffffff', { roughness: 0.6 });
     box(0.5, 2.3, 0.2, frame, 0, 1.15, -0.86, g);
-    box(0.5, 2.3, 0.2, frame, 0, 1.15, 0.86, g);
-    box(0.7, 0.3, 1.92, mat('#ff8fb1', { roughness: 0.6 }), 0, 2.4, 0, g);
+    box(0.8, 0.32, 1.92, mat('#ff8fb1', { roughness: 0.6 }), 0, 2.4, 0, g);
     const pivot = new T.Group();
     pivot.position.set(0, 0, -0.78);
     g.add(pivot);
-    const pm = new T.MeshStandardMaterial({ color: '#8fd3ff', roughness: 0.55, emissive: '#ffcf33', emissiveIntensity: 0 });
-    box(0.36, 2.1, 1.54, pm, 0, 1.06, 0.78, pivot);
-    box(0.38, 0.5, 0.5, mat('#ffffff', { roughness: 0.5 }), 0, 1.55, 0.78, pivot);
-    for (const sx of [-1, 1]) ball(0.09, mat('#ffd400', { metalness: 0.5, roughness: 0.3 }), sx * 0.2, 1.0, 1.3, pivot);
-    ball(0.1, mat('#ffd400', { metalness: 0.5, roughness: 0.3 }), 0, 1.0, 1.56, pivot); // the knob you can see from the front
+    const pm = new T.MeshStandardMaterial({ color: '#3fa9f5', roughness: 0.55, emissive: '#ffcf33', emissiveIntensity: 0 });
+    box(0.5, 2.1, 1.54, pm, 0, 1.06, 0.78, pivot);
+    box(0.52, 0.5, 0.5, mat('#ffffff', { roughness: 0.5 }), 0, 1.55, 0.78, pivot);
+    box(0.52, 0.12, 1.56, mat('#ffffff', { roughness: 0.5 }), 0, 0.35, 0.78, pivot);
+    for (const sx of [-1, 1]) ball(0.1, mat('#ffd400', { metalness: 0.5, roughness: 0.3 }), sx * 0.27, 1.0, 1.3, pivot);
+    ball(0.12, mat('#ffd400', { metalness: 0.5, roughness: 0.3 }), 0, 1.0, 1.58, pivot); // the knob you can see from the front
     const glow = new T.Sprite(new T.SpriteMaterial({ map: G.glowTexture(), color: '#ffe066', transparent: true, opacity: 0, depthWrite: false }));
     glow.scale.set(3.2, 3.6, 1);
     glow.position.set(0, 1.15, 0.2);

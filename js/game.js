@@ -603,7 +603,7 @@
       u.pivot.rotation.y = d.swing * u.open * (PI / 2);
       const glow = d.glow ? 0.6 + Math.sin(G.time * 6) * 0.3 : 0;
       u.pm.emissiveIntensity = glow * 0.8;
-      u.pm.color.set(d.glow ? '#ffe08a' : '#8fd3ff');
+      u.pm.color.set(d.glow ? '#ffe08a' : '#3fa9f5');
       u.glow.material.opacity = glow * 0.8;
       u.star.visible = d.glow;
       u.star.material.rotation = Math.sin(G.time * 3) * 0.4;
