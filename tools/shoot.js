@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /* Screenshots with headless Chrome over the DevTools protocol (node 22's built-in WebSocket, no npm).
    node tools/shoot.js [steps.json] [outdir] [width height mobile]
-   Defaults: tools/shots.json, docs/, 1280 x 800. Serve ~/claude-games first (the preview server on port 8882), or set
-   URL=... (OFFLINE=1 blocks the network, to prove a file:// page needs none). Each step may have js (run in the page, using the window.game hooks), wait (ms) and shot (file name).
-   From TT Four in a Row (by way of Snow TT Bros). docs/screenshot.jpg: node tools/shoot.js tools/shots.json docs 1200 750 */
+   Defaults: tools/shots.json, docs/, 1280 x 800. Opens index.html from the disk (file://), or set URL=... (a preview
+   server works too; OFFLINE=1 blocks the network, to prove a file:// page needs none). Each step may have js (run in the page, using the window.game hooks), wait (ms) and shot (file name).
+   From TT Blob Drop (by way of TT Four in a Row and Snow TT Bros), with its free-port fix. docs/screenshot.jpg: node tools/shoot.js tools/shots.json docs 1200 750 */
 'use strict';
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -13,7 +13,7 @@ const dir = path.join(__dirname, '..');
 const [stepsFile = path.join(__dirname, 'shots.json'), outDir = path.join(dir, 'docs'), W = '1280', H = '800', mobile = '0'] = process.argv.slice(2);
 const steps = JSON.parse(fs.readFileSync(stepsFile, 'utf8'));
 fs.mkdirSync(outDir, { recursive: true });
-const prof = fs.mkdtempSync(path.join(require('os').tmpdir(), 'blobdroptt-chrome-'));
+const prof = fs.mkdtempSync(path.join(require('os').tmpdir(), 'mmtt-chrome-'));
 // port 0: Chrome picks a free port and writes it into the profile's DevToolsActivePort file. (A random port from a fixed
 // range once attached to another session's headless Chrome, and drove that browser instead of ours.)
 const chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
@@ -48,7 +48,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await send('Page.enable');
     await send('Emulation.setDeviceMetricsOverride', { width: +W, height: +H, deviceScaleFactor: 1, mobile: mobile === '1' });
     if (mobile === '1') await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-    await send('Page.navigate', { url: process.env.URL || 'http://localhost:8882/blob-drop-tt/' });
+    await send('Page.navigate', { url: process.env.URL || 'file://' + path.join(dir, 'index.html') });
     await sleep(4000);
     for (const s of steps) {
       if (s.size) await send('Emulation.setDeviceMetricsOverride', { width: s.size[0], height: s.size[1], deviceScaleFactor: 1, mobile: false });
@@ -64,7 +64,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
         console.log('saved', s.shot);
       }
     }
-    if (logs.length) console.log('page errors:\n' + logs.join('\n'));
+    console.log(logs.length ? 'page errors:\n' + logs.join('\n') : 'no page errors');
   } catch (e) {
     console.error(e);
   } finally {

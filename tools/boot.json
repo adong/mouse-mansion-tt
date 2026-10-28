@@ -1,0 +1,6 @@
+[
+  { "label": "muted", "js": "localStorage.setItem('claudeGames.muted', '1'); localStorage.setItem('claudeGames.lang', 'en'); location.reload(); 'reload'", "wait": 5000 },
+  { "label": "boots", "js": "JSON.stringify({ screen: game.state().screen, title: document.title, info: game.info() })", "shot": "b-title" },
+  { "label": "play", "js": "(() => { game.hold(true); game.start({ level: 'normal', go: true }); game.step(6); return JSON.stringify(game.state().cats); })()", "shot": "b-play" },
+  { "label": "buddy", "js": "(() => { game.call(); game.step(1.9); return JSON.stringify(game.state().doors); })()", "shot": "b-buddy" }
+]

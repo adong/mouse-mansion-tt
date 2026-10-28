@@ -19,7 +19,7 @@
   const { FLOOR_Y, WALL, SX, SW, SEGS, TRAMP_Y, APEX_Y, PILLOW_Y } = LV;
   const DT = 1 / 60;
   const PR = 0.34, CR = 0.4; // a mouse's and a cat's half width
-  const DOOR_HALF = 0.12, REACH = 1.6, SWING = 2.0, KNOCK = 2.7;
+  const DOOR_HALF = 0.2, REACH = 1.6, SWING = 2.0, KNOCK = 2.7;
   const CATCH_R = 0.72, TOY_R = 0.7;
   const WAVE_V = 12, WAVE_REACH = 1.3; // the bubble wave's speed, and how far above or below its floor it scoops a cat in a shaft
   const HANG = 0.16, EXIT_EPS = 0.06;
